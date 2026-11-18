@@ -1,0 +1,21 @@
+{
+  "name": "life-discovery",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "npm run build && node scripts/serve.mjs",
+    "build": "tsc && node scripts/build.mjs",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src scripts tests eslint.config.js playwright.config.js",
+    "test": "npm run build && node tests/core.test.mjs",
+    "test:e2e": "playwright test",
+    "check": "npm run typecheck && npm run lint && npm test && npm run test:e2e"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "typescript": "5.9.3",
+    "eslint": "9.39.1",
+    "typescript-eslint": "8.48.0"
+  }
+}
