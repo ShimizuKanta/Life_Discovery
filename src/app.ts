@@ -13,6 +13,7 @@ let page: Page = 'new';
 let index = 0;
 let flipped = false;
 let busy = false;
+let moving = false;
 let draft = { content: '', date: localInput() };
 let reviewDraft = { score: 50, comment: '' };
 let filters = { order: 'newest', archived: false, from: '', to: '' };
@@ -58,14 +59,17 @@ function showError(key: MessageKey): void {
   box.append(close); box.hidden = false;
 }
 async function perform(action: () => Promise<void>): Promise<void> {
-  if (busy) return;
+  if (busy || moving) return;
   busy = true;
   $('#error').hidden = true;
   document.querySelectorAll('.dialog-error').forEach(element => element.remove());
   app.setAttribute('aria-busy', 'true');
   app.querySelectorAll<HTMLButtonElement>('button[type="submit"], [data-mutate]').forEach(button => { button.disabled = true; });
   try { await action(); }
-  catch { showError('error'); }
+  catch {
+    document.querySelector('#discovery-card')?.getAnimations().forEach(animation => animation.cancel());
+    showError('error');
+  }
   finally {
     busy = false;
     app.setAttribute('aria-busy', 'false');
@@ -101,18 +105,21 @@ function render(focus = false): void {
 function renderNew(): string {
   return `<section class="new-page"><div class="intro-plant">${plant}</div>${hero('title', 'intro')}<form id="new-form"><div class="writing-card"><label for="content">${t('content')}</label><textarea id="content" name="content" required placeholder="${t('placeholder')}" rows="5">${escape(draft.content)}</textarea><p class="writing-note">${t('note')}</p><div class="date-row"><label for="discovered-at">${t('date')}</label><input id="discovered-at" name="discoveredAt" type="datetime-local" required value="${escape(draft.date)}"></div></div><button class="primary record-button" type="submit">${t('record')}</button><p class="local-note"><span aria-hidden="true">⌂</span> ${t('local')}</p></form></section>`;
 }
+function annualForm(): string {
+  return `<form id="review-form"><div class="score-heading"><label for="score">${t('score')}</label><output id="score-value" for="score">${reviewDraft.score}%</output></div><input type="range" id="score" min="0" max="100" step="1" value="${reviewDraft.score}" aria-valuetext="${reviewDraft.score}%"><div class="range-labels"><span>${t('lowFull')}</span><span>${t('middle')}</span><span>${t('high')}</span></div><label for="review-comment">${t('comment')}</label><textarea id="review-comment" rows="2" placeholder="${t('commentPlaceholder')}">${escape(reviewDraft.comment)}</textarea><p class="gesture-hint">${t('yearlyHint')}</p><div class="decision-actions"><button id="skip" type="button" class="secondary">${t('skip')}</button><button class="primary" type="submit">${t('reviewSave')}</button></div></form>`;
+}
 function card(item: Discovery): string {
   const status: MessageKey = item.decision === 'pending' ? 'pending' : item.decision === 'kept' ? 'kept' : 'archived';
   const spokenContent = flipped ? `${t(status)}. ${item.review ? `${item.review.score}%. ${item.review.comment}` : t('notReviewed')}` : item.content;
   const cardLabel = escape(`${dateLabel(item.discoveredAt)}. ${spokenContent}. ${t(flipped ? 'flipBack' : 'flip')}`);
-  return `<div class="card-stack"><article class="discovery-card ${item.decision === 'archived' ? 'archived' : ''} ${flipped ? 'flipped' : ''}" id="discovery-card" tabindex="0" role="button" aria-label="${cardLabel}" aria-pressed="${flipped}"><div class="card-topline"><span class="card-symbol" aria-hidden="true">✧</span><time datetime="${item.discoveredAt}">${escape(dateLabel(item.discoveredAt))}</time></div>${flipped ? `<div class="card-back"><span class="small-label">${t('status')}</span><p class="status-pill">${t(status)}</p>${item.review ? `<span class="small-label">${t('reviewLabel')}</span><strong class="review-score">${item.review.score}<small>%</small></strong><p class="card-content">${escape(item.review.comment)}</p><small>${escape(dateLabel(item.review.reviewedAt))}</small>` : `<p class="muted">${t('notReviewed')}</p>`}</div>` : `<p class="card-content">${escape(item.content)}</p>${item.decision === 'archived' ? `<span class="status-pill">${t('archived')}</span>` : ''}`}<div class="card-bottom"><span>${t(flipped ? 'flipBack' : 'flip')}</span><span aria-hidden="true">↻</span></div></article></div><div class="card-meta"><span>${t('editHint')}</span><button class="text-button" id="edit-card">${t('edit')} <span aria-hidden="true">↗</span></button></div>`;
+  return `<div class="card-stack"><article class="discovery-card ${item.decision === 'archived' ? 'archived' : ''} ${flipped ? 'flipped' : ''}" id="discovery-card" tabindex="0" role="${page === 'yearly' ? 'group' : 'button'}" aria-label="${cardLabel}" ${page === 'yearly' ? '' : `aria-pressed="${flipped}"`}><div class="card-topline"><span class="card-symbol" aria-hidden="true">✧</span><time datetime="${item.discoveredAt}">${escape(dateLabel(item.discoveredAt))}</time></div>${flipped ? `<div class="card-back"><span class="small-label">${t('status')}</span><p class="status-pill">${t(status)}</p>${item.review ? `<span class="small-label">${t('reviewLabel')}</span><strong class="review-score">${item.review.score}<small>%</small></strong><p class="card-content">${escape(item.review.comment)}</p><small>${escape(dateLabel(item.review.reviewedAt))}</small>` : `<p class="muted">${t('notReviewed')}</p>`}</div>` : `<p class="card-content">${escape(item.content)}</p>${item.decision === 'archived' ? `<span class="status-pill">${t('archived')}</span>` : ''}`}${page === 'yearly' ? annualForm() : ''}<div class="card-bottom"><span>${t(flipped ? 'flipBack' : 'flip')}</span><span aria-hidden="true">↻</span></div></article></div><div class="card-meta"><span>${t('editHint')}</span><button class="text-button" id="edit-card">${t('edit')} <span aria-hidden="true">↗</span></button></div>`;
 }
 function renderCards(): string {
   const cards = queue();
   const item = current();
   const title = page === 'weekly' ? 'weeklyTitle' : page === 'yearly' ? 'yearlyTitle' : 'deckTitle';
   const intro = page === 'weekly' ? 'weeklyIntro' : page === 'yearly' ? 'yearlyIntro' : 'deckIntro';
-  return `<section class="review-page">${hero(title, intro)}${page === 'deck' ? `<div class="filters"><div class="filter-row"><label class="sr-only" for="sort">${t('sort')}</label><select id="sort"><option value="newest" ${filters.order === 'newest' ? 'selected' : ''}>${t('newest')}</option><option value="oldest" ${filters.order === 'oldest' ? 'selected' : ''}>${t('oldest')}</option></select><label class="checkbox-label"><input id="include-archived" type="checkbox" ${filters.archived ? 'checked' : ''}>${t('includeArchived')}</label></div><details ${filters.from || filters.to ? 'open' : ''}><summary>${t('period')}</summary><div class="date-filters"><label>${t('from')}<input type="date" id="from" value="${filters.from}"></label><label>${t('to')}<input type="date" id="to" value="${filters.to}"></label></div>${filters.from && filters.to && filters.from > filters.to ? `<p class="validation">${t('invalidRange')}</p>` : ''}<button id="reset-filters" class="text-button">${t('clear')}</button></details></div>` : `<div class="queue-label"><span class="queue-dot"></span><span>${cards.length} ${t('countUnit')} ${t('waiting')}</span></div>`}${item ? `${card(item)}${page === 'weekly' ? `<p class="gesture-hint">${t('weeklyHint')}</p><div class="decision-actions"><button class="secondary" id="archive" data-mutate>${t('archive')}</button><button class="primary" id="keep" data-mutate>✓ ${t('keep')}</button></div><button id="skip" class="text-button later">${t('skip')} ↓</button><p class="helper">${t('archiveNote')}</p>` : page === 'yearly' ? `<form id="review-form"><div class="score-heading"><label for="score">${t('score')}</label><output id="score-value" for="score">${reviewDraft.score}%</output></div><input type="range" id="score" min="0" max="100" step="1" value="${reviewDraft.score}" aria-valuetext="${reviewDraft.score}%"><div class="range-labels"><span>${t('lowFull')}</span><span>${t('middle')}</span><span>${t('high')}</span></div><label for="review-comment">${t('comment')}</label><textarea id="review-comment" rows="2" placeholder="${t('commentPlaceholder')}">${escape(reviewDraft.comment)}</textarea><p class="gesture-hint">${t('yearlyHint')}</p><div class="decision-actions"><button id="skip" type="button" class="secondary">${t('skip')}</button><button class="primary" type="submit">${t('reviewSave')}</button></div></form>` : `<div class="deck-navigation"><button id="previous" class="icon-button" aria-label="${t('prev')}" ${index === 0 ? 'disabled' : ''}>←</button><span class="deck-position">${index + 1} <span>/ ${cards.length}</span></span><button id="next" class="icon-button" aria-label="${t('next')}" ${index >= cards.length - 1 ? 'disabled' : ''}>→</button></div><div class="deck-progress" role="progressbar" aria-label="${t('deck')}" aria-valuenow="${index + 1}" aria-valuemin="0" aria-valuemax="${cards.length}"><span style="width:${(index + 1) / cards.length * 100}%"></span></div>`}` : emptyState()}</section>`;
+  return `<section class="review-page">${hero(title, intro)}${page === 'deck' ? `<div class="filters"><div class="filter-row"><label class="sr-only" for="sort">${t('sort')}</label><select id="sort"><option value="newest" ${filters.order === 'newest' ? 'selected' : ''}>${t('newest')}</option><option value="oldest" ${filters.order === 'oldest' ? 'selected' : ''}>${t('oldest')}</option></select><label class="checkbox-label"><input id="include-archived" type="checkbox" ${filters.archived ? 'checked' : ''}>${t('includeArchived')}</label></div><details ${filters.from || filters.to ? 'open' : ''}><summary>${t('period')}</summary><div class="date-filters"><label>${t('from')}<input type="date" id="from" value="${filters.from}"></label><label>${t('to')}<input type="date" id="to" value="${filters.to}"></label></div>${filters.from && filters.to && filters.from > filters.to ? `<p class="validation">${t('invalidRange')}</p>` : ''}<button id="reset-filters" class="text-button">${t('clear')}</button></details></div>` : `<div class="queue-label"><span class="queue-dot"></span><span>${cards.length} ${t('countUnit')} ${t('waiting')}</span></div>`}${item ? `${card(item)}${page === 'weekly' ? `<p class="gesture-hint">${t('weeklyHint')}</p><div class="decision-actions"><button class="secondary" id="archive" data-mutate>${t('archive')}</button><button class="primary" id="keep" data-mutate>✓ ${t('keep')}</button></div><button id="skip" class="text-button later">${t('skip')} ↓</button><p class="helper">${t('archiveNote')}</p>` : page === 'yearly' ? '' : `<div class="deck-navigation"><button id="previous" class="icon-button" aria-label="${t('prev')}" ${index === 0 ? 'disabled' : ''}>←</button><span class="deck-position">${index + 1} <span>/ ${cards.length}</span></span><button id="next" class="icon-button" aria-label="${t('next')}" ${index >= cards.length - 1 ? 'disabled' : ''}>→</button></div><div class="deck-progress" role="progressbar" aria-label="${t('deck')}" aria-valuenow="${index + 1}" aria-valuemin="0" aria-valuemax="${cards.length}"><span style="width:${(index + 1) / cards.length * 100}%"></span></div>`}` : emptyState()}</section>`;
 }
 function emptyState(): string {
   const filtered = page === 'deck' && items.length > 0;
@@ -124,7 +131,7 @@ function renderSettings(): string {
   return `<section class="settings-page">${hero('settingsTitle')}<section class="settings-block language-block"><label for="language">${t('language')}</label><select id="language"><option value="ja" ${settings.language === 'ja' ? 'selected' : ''}>日本語</option><option value="en" ${settings.language === 'en' ? 'selected' : ''}>English</option></select></section><section class="settings-block"><h2>${t('backupTitle')}</h2><p>${t('backup')}</p><div class="backup-actions"><button class="secondary" id="export">↓ ${t('export')}</button><button class="secondary" id="import" data-mutate>↑ ${t('import')}</button><input id="import-file" type="file" accept=".json,application/json" hidden></div><small>${t('importNote')}</small></section><section class="settings-block"><h2>${t('privacyTitle')}</h2><p>${t('privacy')}</p></section><section class="settings-block"><h2>${t('installTitle')}</h2><p>${t('install')}</p><p>${t('installData')}</p><p>${t('offline')}</p><div id="offline-status" role="status">${t(offlineState)}</div><div id="update-status" ${registration?.waiting ? '' : 'hidden'}><p>${t('update')} — ${t('updateNote')}</p><button class="secondary" id="update-app">${t('updateAction')}</button></div></section><p class="version">Life Discovery · 1.0</p></section>`;
 }
 function navigate(target: Page): void {
-  if (busy) return;
+  if (busy || moving) return;
   page = target; index = 0; flipped = false; reviewDraft = { score: 50, comment: '' };
   if (page === 'new' && !draft.content) draft.date = localInput();
   render(true); window.scrollTo({ top: 0 });
@@ -154,7 +161,7 @@ function bindNew(): void {
   };
 }
 function advance(delta: number, wrap = true): void {
-  if (busy) return;
+  if (busy || moving) return;
   const length = queue().length;
   index = wrap ? (index + delta + length) % (length || 1) : Math.max(0, Math.min(length - 1, index + delta));
   flipped = false; reviewDraft = { score: 50, comment: '' }; render();
@@ -188,9 +195,23 @@ function bindCards(): void {
   const item = current(); if (!item) return;
   let suppressClick = false;
   const element = $('#discovery-card');
-  element.onclick = () => { if (!suppressClick && !busy) { flipped = !flipped; render(); $('#discovery-card').focus({ preventScroll: true }); } };
+  const flip = async () => {
+    if (suppressClick || busy || moving) return;
+    moving = true; app.inert = true;
+    await animateCard(element, [{ transform: 'perspective(1000px) rotateY(0deg)' }, { transform: 'perspective(1000px) rotateY(-90deg)' }], 160);
+    if (!element.isConnected) { moving = false; app.inert = false; return; }
+    flipped = !flipped; render();
+    const next = $('#discovery-card');
+    await animateCard(next, [{ transform: 'perspective(1000px) rotateY(90deg)' }, { transform: 'perspective(1000px) rotateY(0deg)' }], 180);
+    moving = false; app.inert = false;
+    next.focus({ preventScroll: true });
+  };
+  element.onclick = event => {
+    if (!(event.target as HTMLElement).closest('form,button,input,textarea,label,select')) void flip();
+  };
   element.onkeydown = event => {
-    if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); suppressClick = false; element.click(); }
+    if (event.target !== element) return;
+    if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); suppressClick = false; void flip(); }
     if (page === 'deck' && ['ArrowLeft', 'ArrowRight'].includes(event.key)) { event.preventDefault(); advance(event.key === 'ArrowLeft' ? -1 : 1, false); }
   };
   swipe(element, direction => {
@@ -198,7 +219,7 @@ function bindCards(): void {
     if (page === 'weekly') { if (direction === 'right') judge('kept'); else if (direction === 'left') judge('archived'); else if (direction === 'up') advance(1); }
     else if (page === 'yearly') { if (direction === 'right') saveReview(); else if (direction === 'left') advance(1); }
     else if (direction === 'left' || direction === 'right') advance(direction === 'left' ? 1 : -1, false);
-  }, () => { suppressClick = true; openEditor(item); }, () => { suppressClick = false; });
+  }, () => { suppressClick = true; openEditor(item); }, () => { suppressClick = false; }, () => { suppressClick = true; });
   $('#edit-card').onclick = () => openEditor(item);
   if (page === 'weekly') {
     $('#keep').onclick = () => judge('kept'); $('#archive').onclick = () => judge('archived'); $('#skip').onclick = () => advance(1);
@@ -214,31 +235,62 @@ function bindCards(): void {
     $('#previous').onclick = () => advance(-1, false); $('#next').onclick = () => advance(1, false);
   }
 }
-function swipe(element: HTMLElement, action: (direction: 'left' | 'right' | 'up' | 'down') => void, hold?: () => void, start?: () => void): void {
-  let x = 0, y = 0, active = false, held = false;
+async function animateCard(element: HTMLElement, frames: Keyframe[], duration: number, retain = false): Promise<void> {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const animation = element.animate(frames, { duration, easing: 'cubic-bezier(.2,.75,.25,1)', fill: retain ? 'forwards' : 'none' });
+  await animation.finished.catch(() => undefined);
+}
+function swipe(element: HTMLElement, action: (direction: 'left' | 'right' | 'up' | 'down') => void, hold?: () => void, start?: () => void, moved?: () => void): void {
+  let x = 0, y = 0, active = false, dx = 0, dy = 0;
   let timer: ReturnType<typeof setTimeout>;
+  const isCard = element.id === 'discovery-card';
+  const settle = () => {
+    clearTimeout(timer); active = false;
+    const transform = element.style.transform;
+    element.style.transform = '';
+    element.classList.remove('dragging');
+    if (isCard && transform) void animateCard(element, [{ transform }, { transform: 'translate(0,0) rotate(0deg)' }], 220);
+  };
   element.addEventListener('pointerdown', event => {
-    if (!event.isPrimary || event.button !== 0 || busy || (event.target as HTMLElement).closest('button,input,textarea,select,a')) return;
-    x = event.clientX; y = event.clientY; active = true; held = false; start?.();
-    if (hold) timer = setTimeout(() => { held = true; active = false; hold(); }, 550);
+    if (!event.isPrimary || event.button !== 0 || busy || moving || (event.target as HTMLElement).closest('form,button,input,textarea,select,a,label')) return;
+    element.getAnimations().forEach(animation => animation.cancel());
+    x = event.clientX; y = event.clientY; dx = 0; dy = 0; active = true; start?.();
+    element.setPointerCapture(event.pointerId);
+    if (hold) timer = setTimeout(() => { settle(); hold(); }, 550);
   });
   element.addEventListener('pointermove', event => {
     if (!active) return;
-    if (Math.abs(event.clientX - x) + Math.abs(event.clientY - y) > 12) clearTimeout(timer);
+    dx = event.clientX - x; dy = event.clientY - y;
+    if (Math.abs(dx) + Math.abs(dy) > 6) { clearTimeout(timer); moved?.(); }
+    if (isCard) {
+      element.classList.add('dragging');
+      element.style.transform = `translate(${dx}px,${page === 'weekly' ? dy : dy * .12}px) rotate(${dx / 22}deg)`;
+    }
   });
-  element.addEventListener('pointerup', event => {
+  element.addEventListener('pointerup', () => {
     clearTimeout(timer);
-    if (!active || held) return;
+    if (!active) return;
     active = false;
-    const dx = event.clientX - x, dy = event.clientY - y;
-    if (Math.max(Math.abs(dx), Math.abs(dy)) < 65) return;
-    action(Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up'));
+    if (Math.max(Math.abs(dx), Math.abs(dy)) < 65) { settle(); return; }
+    const direction = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up');
+    const valid = !isCard || (page === 'weekly' ? direction !== 'down' : direction === 'left' || direction === 'right');
+    const edge = isCard && page === 'deck' && ((direction === 'right' && index === 0) || (direction === 'left' && index === queue().length - 1));
+    if (!valid || edge) { settle(); return; }
+    if (!isCard) { action(direction); return; }
+    moving = true; app.inert = true;
+    const transform = element.style.transform;
+    element.style.transform = ''; element.classList.remove('dragging');
+    const exit = direction === 'up' ? 'translateY(-110vh)' : `translateX(${direction === 'left' ? '-' : ''}110vw) rotate(${direction === 'left' ? '-' : ''}20deg)`;
+    void animateCard(element, [{ transform, opacity: 1 }, { transform: exit, opacity: 0 }], 220, true).then(() => {
+      moving = false; app.inert = false;
+      if (element.isConnected) action(direction);
+    });
   });
-  ['pointercancel', 'lostpointercapture', 'pointerleave'].forEach(type => element.addEventListener(type, () => { clearTimeout(timer); active = false; }));
+  ['pointercancel', 'lostpointercapture'].forEach(type => element.addEventListener(type, () => { if (active) settle(); }));
   element.addEventListener('contextmenu', event => { if (hold) event.preventDefault(); });
 }
 function openEditor(item: Discovery): void {
-  if (busy) return;
+  if (busy || moving) return;
   const dialog = $<HTMLDialogElement>('#editor');
   dialog.innerHTML = `<form id="edit-form"><div class="dialog-heading"><h2 id="edit-title">${t('editTitle')}</h2><button type="button" id="edit-close" class="icon-button" aria-label="${t('close')}">×</button></div><label for="edit-content">${t('content')}</label><textarea id="edit-content" rows="5" required>${escape(item.content)}</textarea><label for="edit-date">${t('date')}</label><input id="edit-date" type="datetime-local" required value="${localInput(new Date(item.discoveredAt))}"><p class="helper">${t(item.decision === 'archived' ? 'archived' : item.decision === 'kept' ? 'kept' : 'pending')}</p><button class="primary" type="submit">${t('save')}</button>${item.decision === 'archived' ? `<button id="restore" type="button" class="secondary" data-mutate>${t('restore')}</button>` : ''}<div class="dialog-footer"><button id="delete" type="button" class="danger text-button" data-mutate>${t('delete')}</button><button id="edit-cancel" type="button" class="text-button">${t('cancel')}</button></div></form>`;
   dialog.showModal();
@@ -311,7 +363,7 @@ function queueSignature(): string {
   return [...items.filter(item => weeklyDue(item)).map(item => 'w' + item.id), ...items.filter(item => yearlyDue(item)).map(item => 'y' + item.id)].join('|');
 }
 function refreshDue(): void {
-  if (busy) return;
+  if (busy || moving) return;
   const counts = { weekly: items.filter(item => weeklyDue(item)).length, yearly: items.filter(item => yearlyDue(item)).length };
   for (const [key, value] of Object.entries(counts)) {
     const badge = document.querySelector(`[data-count="${key}"]`);

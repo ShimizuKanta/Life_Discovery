@@ -1128,3 +1128,54 @@ body {
     font-size: 16px;
   }
 }
+
+/* Rich green paper, visible edges, and a stable deck under the moving card. */
+.app-shell { overflow-x: clip; }
+.card-stack { perspective: 1000px; }
+.card-stack:before {
+  background: #8fa578;
+  border-color: #748b60;
+  transform: translateY(12px) rotate(-2.5deg);
+}
+.card-stack:after {
+  background: #b8cc9f;
+  border-color: #8ea676;
+  transform: translateY(6px) rotate(1.5deg);
+}
+.discovery-card {
+  background: linear-gradient(135deg, #d5e6b9, #b4ce98);
+  border: 1px solid #829e69;
+  box-shadow: inset 0 0 0 4px #ffffff36, 0 5px 0 #7e9768, 0 16px 28px #354b3426;
+  animation: none;
+  transform-origin: center center;
+}
+.discovery-card.flipped {
+  background: linear-gradient(135deg, #bbd5a4, #9fbe88);
+  animation: none;
+}
+.discovery-card.archived {
+  background: linear-gradient(135deg, #e0e3db, #c5cbbf);
+  border-color: #9ba494;
+  box-shadow: inset 0 0 0 4px #ffffff36, 0 5px 0 #959e8e, 0 16px 28px #354b341a;
+  color: #586252;
+}
+.discovery-card.dragging { cursor: grabbing; will-change: transform; }
+.discovery-card .card-topline, .discovery-card .card-symbol,
+.discovery-card .small-label, .discovery-card .muted,
+.discovery-card .card-bottom { color: #435a37; }
+.discovery-card .card-topline { font-size: .875rem; }
+.discovery-card .card-bottom { border-color: #78926366; font-size: .75rem; }
+.discovery-card .status-pill { background: #f6faedb3; }
+.discovery-card #review-form {
+  border-top: 1px solid #78926366;
+  margin: 0 0 22px;
+  padding-top: 12px;
+  cursor: auto;
+  user-select: text;
+  -webkit-user-select: text;
+}
+.discovery-card #review-form label { font-size: .875rem; }
+.discovery-card .range-labels { font-size: .75rem; color: #435a37; }
+.discovery-card #review-comment { background: #f6faee; }
+.discovery-card #review-form .secondary { background: #e7f0dc; border-color: #789263; }
+.discovery-card:has(#review-form) .card-content { margin-bottom: 22px; }

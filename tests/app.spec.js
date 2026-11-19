@@ -35,6 +35,7 @@ async function gesture(page, direction) {
   await session.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [end] });
   await session.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
   await session.detach();
+  await expect.poll(() => page.locator('#app').evaluate(el => el.inert)).toBe(false);
 }
 
 test.beforeEach(async ({ page }) => { await page.goto('./'); await expect(page.locator('#content')).toBeVisible(); });
@@ -269,4 +270,45 @@ test('editing a discovery out of the annual queue does not move its unfinished a
   await expect(page.locator('#discovery-card')).toContainText('二つ目の発見');
   await expect(page.locator('#score')).toHaveValue('50');
   await expect(page.locator('#review-comment')).toHaveValue('');
+});
+
+test('cards follow small drags, spring back, flip in 3D and keep annual controls independent', async ({ page }) => {
+  await add(page, '動くカード');
+  await go(page, 'deck');
+  const card = page.locator('#discovery-card');
+  await card.scrollIntoViewIfNeeded();
+  const box = await card.boundingBox();
+  await page.mouse.move(box.x + 80, box.y + 90);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 105, box.y + 90, { steps: 3 });
+  await expect(card).toHaveClass(/dragging/);
+  expect(await card.evaluate(el => new DOMMatrix(getComputedStyle(el).transform).m41)).toBeCloseTo(25, 0);
+  await page.mouse.up();
+  await expect(card).toHaveAttribute('aria-pressed', 'false');
+  await expect.poll(() => card.evaluate(el => getComputedStyle(el).transform)).toBe('none');
+  await card.click();
+  await expect.poll(() => page.locator('#app').evaluate(el => el.inert)).toBe(true);
+  await expect(page.locator('#discovery-card')).toHaveAttribute('aria-pressed', 'true');
+  await expect.poll(() => page.locator('#app').evaluate(el => el.inert)).toBe(false);
+  await go(page, 'weekly');
+  await page.locator('#keep').click();
+  await go(page, 'yearly');
+  await expect(page.locator('#discovery-card #review-form')).toBeVisible();
+  await page.locator('#review-comment').fill('入力を維持');
+  await page.locator('#review-comment').press('Space');
+  await page.locator('#score').fill('80');
+  await page.locator('#score').dispatchEvent('input');
+  await page.locator('#score').press('ArrowRight');
+  await expect(page.locator('#score')).toHaveValue('81');
+  await expect(card).not.toHaveClass(/flipped/);
+  await page.locator('#discovery-card .card-topline').click();
+  await expect(card).toHaveClass(/flipped/);
+  await expect.poll(() => page.locator('#app').evaluate(el => el.inert)).toBe(false);
+  await expect(page.locator('#score')).toHaveValue('81');
+  await expect(page.locator('#review-comment')).toHaveValue('入力を維持 ');
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.locator('#discovery-card .card-topline').click();
+  await expect(card).not.toHaveClass(/flipped/);
+  await expect(page.locator('#score')).toHaveValue('81');
+  await page.screenshot({ path: 'test-results/annual-card.png', fullPage: true });
 });
