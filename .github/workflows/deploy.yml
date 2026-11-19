@@ -12,7 +12,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -23,8 +23,12 @@ jobs:
       - run: npm run typecheck
       - run: npm run lint
       - run: npm test
-      - run: npx playwright install --with-deps chromium
-      - run: npm run test:e2e
+      - name: Run browser tests with runner-provided Chrome
+        run: |
+          PLAYWRIGHT_CHROME_PATH="$(command -v google-chrome)"
+          export PLAYWRIGHT_CHROME_PATH
+          "$PLAYWRIGHT_CHROME_PATH" --version
+          npm run test:e2e
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
