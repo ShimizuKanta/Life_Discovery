@@ -1,10 +1,11 @@
-import { createDiscovery, decide, filterDeck, localInput, parseBackup, weeklyDue, yearlyDue } from './core.js';
-import type { Backup, Discovery, Language, Settings } from './core.js';
+import { preparePhoto, validatePhotos } from './photos.js';
+import { categories, createDiscovery, decide, filterDeck, localInput, parseBackup, weeklyDue, yearlyDue } from './core.js';
+import type { Backup, Category, Discovery, Language, Settings } from './core.js';
 import { browserLanguage, translator } from './i18n.js';
 import type { MessageKey } from './i18n.js';
 import * as storage from './storage.js';
 
-type Page = 'new' | 'weekly' | 'yearly' | 'deck' | 'settings';
+type Page = 'new' | 'weekly' | 'yearly' | 'deck' | 'settings' | 'calendar';
 const app = document.querySelector<HTMLDivElement>('#app')!;
 let settings: Settings = { language: browserLanguage() };
 let t = translator(settings.language);
@@ -14,22 +15,25 @@ let index = 0;
 let flipped = false;
 let busy = false;
 let moving = false;
-let draft = { content: '', date: localInput() };
+const emptyDraft = () => ({ content: '', date: localInput(), category: 'other' as Category, photo: null as string | null });
+let draft = emptyDraft();
+let calendarMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+let selectedDay = localInput().slice(0, 10);
 let reviewDraft = { score: 50, comment: '' };
-let filters = { order: 'newest', archived: false, from: '', to: '' };
+let filters = { order: 'newest', archived: false, from: '', to: '', category: 'all' };
 let toastTimer: ReturnType<typeof setTimeout>;
 let offlineState: 'offlineReady' | 'offlinePreparing' | 'offlineUnavailable' = 'offlinePreparing';
 let registration: ServiceWorkerRegistration | undefined;
 let updating = false;
 let lastQueueSignature = '';
-const icons: Record<Page, string> = { new: '＋', weekly: '◷', yearly: '✧', deck: '▤', settings: '⚙' };
+const icons: Record<Page, string> = { new: '＋', weekly: '◷', yearly: '✧', deck: '▤', settings: '⚙', calendar: '▦' };
 const escape = (value: string): string => value.replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]!);
 const $ = <T extends Element = HTMLElement>(selector: string, root: ParentNode = document): T => root.querySelector<T>(selector)!;
 const dateLabel = (value: string): string => new Intl.DateTimeFormat(settings.language === 'ja' ? 'ja-JP' : 'en-GB', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(value));
 const plant = '<svg class="plant" viewBox="0 0 140 140" fill="none" aria-hidden="true"><circle cx="70" cy="70" r="65" fill="#e8eddc"/><path d="M70 112V63" stroke="#5c7853" stroke-width="3" stroke-linecap="round"/><path d="M69 85C36 86 27 64 29 46c28-2 46 15 40 39Z" fill="#a3b88e"/><path d="M70 69C67 38 88 27 112 29c0 26-15 43-42 40Z" fill="#77956b"/><path d="m72 66 24-22M67 80 43 59" stroke="#f5f6ee" stroke-width="1.5" stroke-linecap="round"/></svg>';
 
 function queue(): Discovery[] {
-  if (page === 'deck') return filterDeck(items, filters.order, filters.archived, filters.from, filters.to);
+  if (page === 'deck') return filterDeck(items, filters.order, filters.archived, filters.from, filters.to, filters.category);
   return items.filter(item => page === 'weekly' ? weeklyDue(item) : yearlyDue(item))
     .sort((a, b) => Date.parse(a.discoveredAt) - Date.parse(b.discoveredAt));
 }
@@ -84,7 +88,7 @@ function updateItem(item: Discovery): void {
 }
 function navigation(): string {
   const counts = { weekly: items.filter(item => weeklyDue(item)).length, yearly: items.filter(item => yearlyDue(item)).length };
-  return (['new', 'weekly', 'yearly', 'deck', 'settings'] as Page[]).map(target => `<button class="nav-link ${page === target ? 'active' : ''}" data-page="${target}" ${page === target ? 'aria-current="page"' : ''}><span class="nav-icon" aria-hidden="true">${icons[target]}</span><span>${t(target)}</span>${target === 'weekly' || target === 'yearly' ? `<span class="badge" data-count="${target}">${counts[target]}</span>` : ''}</button>`).join('');
+  return (['new', 'weekly', 'yearly', 'deck', 'calendar', 'settings'] as Page[]).map(target => `<button class="nav-link ${page === target ? 'active' : ''}" data-page="${target}" ${page === target ? 'aria-current="page"' : ''}><span class="nav-icon" aria-hidden="true">${icons[target]}</span><span>${t(target)}</span>${target === 'weekly' || target === 'yearly' ? `<span class="badge" data-count="${target}">${counts[target]}</span>` : ''}</button>`).join('');
 }
 function hero(title: MessageKey, intro?: MessageKey): string {
   return `<div class="page-heading"><span class="eyebrow">${page === 'new' ? t('eyebrow') : `LIFE DISCOVERY / ${page.toUpperCase()}`}</span><h1 tabindex="-1">${escape(t(title))}</h1>${intro ? `<p>${escape(t(intro))}</p>` : ''}</div>`;
@@ -93,17 +97,18 @@ function render(focus = false): void {
   t = translator(settings.language);
   document.documentElement.lang = settings.language;
   document.title = `${t(page)} · Life Discovery`;
-  app.innerHTML = `<div class="app-shell"><header class="header"><button id="menu" class="icon-button" aria-label="${t('menu')}" aria-haspopup="dialog"><span class="hamburger" aria-hidden="true"></span><span class="menu-dot" ${items.some(item => weeklyDue(item) || yearlyDue(item)) ? '' : 'hidden'}></span></button><a class="wordmark" href="#" id="home">Life <span>Discovery</span><span class="brand-dot">.</span></a><span class="header-leaf" aria-hidden="true">❧</span></header><main id="main">${page === 'new' ? renderNew() : page === 'settings' ? renderSettings() : renderCards()}</main>${page !== 'new' ? `<footer class="add-bar"><button data-page="new" class="primary">${t('add')}</button></footer>` : ''}<dialog id="drawer" class="drawer"><div class="drawer-top"><span class="wordmark">Life Discovery<span class="brand-dot">.</span></span><button class="icon-button" id="close-menu" aria-label="${t('close')}">×</button></div><p class="drawer-tagline">${t('tagline')}</p><nav aria-label="${t('menu')}">${navigation()}</nav><div class="drawer-bottom">${plant}<p>${t('allDone')}</p><small>${items.length} ${t('total')}</small></div></dialog><dialog id="editor" class="edit-dialog" aria-labelledby="edit-title"></dialog></div>`;
+  app.innerHTML = `<div class="app-shell"><header class="header"><button id="menu" class="icon-button" aria-label="${t('menu')}" aria-haspopup="dialog"><span class="hamburger" aria-hidden="true"></span><span class="menu-dot" ${items.some(item => weeklyDue(item) || yearlyDue(item)) ? '' : 'hidden'}></span></button><a class="wordmark" href="#" id="home">Life <span>Discovery</span><span class="brand-dot">.</span></a><span class="header-leaf" aria-hidden="true">❧</span></header><main id="main">${page === 'new' ? renderNew() : page === 'settings' ? renderSettings() : page === 'calendar' ? renderCalendar() : renderCards()}</main>${page !== 'new' ? `<footer class="add-bar"><button data-page="new" class="primary">${t('add')}</button></footer>` : ''}<dialog id="drawer" class="drawer"><div class="drawer-top"><span class="wordmark">Life Discovery<span class="brand-dot">.</span></span><button class="icon-button" id="close-menu" aria-label="${t('close')}">×</button></div><p class="drawer-tagline">${t('tagline')}</p><nav aria-label="${t('menu')}">${navigation()}</nav><div class="drawer-bottom">${plant}<p>${t('allDone')}</p><small>${items.length} ${t('total')}</small></div></dialog><dialog id="editor" class="edit-dialog" aria-labelledby="edit-title"></dialog></div>`;
   app.setAttribute('aria-busy', String(busy));
   bindCommon();
   if (page === 'new') bindNew();
   else if (page === 'settings') bindSettings();
+  else if (page === 'calendar') bindCalendar();
   else bindCards();
   lastQueueSignature = queueSignature();
   if (focus) $('h1').focus();
 }
 function renderNew(): string {
-  return `<section class="new-page"><div class="intro-plant">${plant}</div>${hero('title', 'intro')}<form id="new-form"><div class="writing-card"><label for="content">${t('content')}</label><textarea id="content" name="content" required placeholder="${t('placeholder')}" rows="5">${escape(draft.content)}</textarea><p class="writing-note">${t('note')}</p><div class="date-row"><label for="discovered-at">${t('date')}</label><input id="discovered-at" name="discoveredAt" type="datetime-local" required value="${escape(draft.date)}"></div></div><button class="primary record-button" type="submit">${t('record')}</button><p class="local-note"><span aria-hidden="true">⌂</span> ${t('local')}</p></form></section>`;
+  return `<section class="new-page"><div class="intro-plant">${plant}</div>${hero('title', 'intro')}<form id="new-form"><div class="writing-card"><label for="content">${t('content')}</label><textarea id="content" name="content" required placeholder="${t('placeholder')}" rows="5">${escape(draft.content)}</textarea><p class="writing-note">${t('note')}</p>${metadataFields('new', draft)}<p class="helper">${t('voiceHint')}</p><div class="date-row"><label for="discovered-at">${t('date')}</label><input id="discovered-at" name="discoveredAt" type="datetime-local" required value="${escape(draft.date)}"></div></div><button class="primary record-button" type="submit">${t('record')}</button><p class="local-note"><span aria-hidden="true">⌂</span> ${t('local')}</p></form></section>`;
 }
 function annualForm(): string {
   return `<form id="review-form"><div class="score-heading"><label for="score">${t('score')}</label><output id="score-value" for="score">${reviewDraft.score}%</output></div><input type="range" id="score" min="0" max="100" step="1" value="${reviewDraft.score}" aria-valuetext="${reviewDraft.score}%"><div class="range-labels"><span>${t('lowFull')}</span><span>${t('middle')}</span><span>${t('high')}</span></div><label for="review-comment">${t('comment')}</label><textarea id="review-comment" rows="2" placeholder="${t('commentPlaceholder')}">${escape(reviewDraft.comment)}</textarea><p class="gesture-hint">${t('yearlyHint')}</p><div class="decision-actions"><button id="skip" type="button" class="secondary">${t('skip')}</button><button class="primary" type="submit">${t('reviewSave')}</button></div></form>`;
@@ -112,14 +117,14 @@ function card(item: Discovery): string {
   const status: MessageKey = item.decision === 'pending' ? 'pending' : item.decision === 'kept' ? 'kept' : 'archived';
   const spokenContent = flipped ? `${t(status)}. ${item.review ? `${item.review.score}%. ${item.review.comment}` : t('notReviewed')}` : item.content;
   const cardLabel = escape(`${dateLabel(item.discoveredAt)}. ${spokenContent}. ${t(flipped ? 'flipBack' : 'flip')}`);
-  return `<div class="card-stack"><article class="discovery-card ${item.decision === 'archived' ? 'archived' : ''} ${flipped ? 'flipped' : ''}" id="discovery-card" tabindex="0" role="${page === 'yearly' ? 'group' : 'button'}" aria-label="${cardLabel}" ${page === 'yearly' ? '' : `aria-pressed="${flipped}"`}><div class="card-topline"><span class="card-symbol" aria-hidden="true">✧</span><time datetime="${item.discoveredAt}">${escape(dateLabel(item.discoveredAt))}</time></div>${flipped ? `<div class="card-back"><span class="small-label">${t('status')}</span><p class="status-pill">${t(status)}</p>${item.review ? `<span class="small-label">${t('reviewLabel')}</span><strong class="review-score">${item.review.score}<small>%</small></strong><p class="card-content">${escape(item.review.comment)}</p><small>${escape(dateLabel(item.review.reviewedAt))}</small>` : `<p class="muted">${t('notReviewed')}</p>`}</div>` : `<p class="card-content">${escape(item.content)}</p>${item.decision === 'archived' ? `<span class="status-pill">${t('archived')}</span>` : ''}`}${page === 'yearly' ? annualForm() : ''}<div class="card-bottom"><span>${t(flipped ? 'flipBack' : 'flip')}</span><span aria-hidden="true">↻</span></div></article></div><div class="card-meta"><span>${t('editHint')}</span><button class="text-button" id="edit-card">${t('edit')} <span aria-hidden="true">↗</span></button></div>`;
+  return `<div class="card-stack"><article class="discovery-card ${item.decision === 'archived' ? 'archived' : ''} ${flipped ? 'flipped' : ''}" id="discovery-card" tabindex="0" role="${page === 'yearly' ? 'group' : 'button'}" aria-label="${cardLabel}" ${page === 'yearly' ? '' : `aria-pressed="${flipped}"`}><div class="card-topline"><span class="category-tag">${categoryLabel(item)}</span><time datetime="${item.discoveredAt}">${escape(dateLabel(item.discoveredAt))}</time></div>${flipped ? `<div class="card-back"><span class="small-label">${t('status')}</span><p class="status-pill">${t(status)}</p>${item.review ? `<span class="small-label">${t('reviewLabel')}</span><strong class="review-score">${item.review.score}<small>%</small></strong><p class="card-content">${escape(item.review.comment)}</p><small>${escape(dateLabel(item.review.reviewedAt))}</small>` : `<p class="muted">${t('notReviewed')}</p>`}</div>` : ` ${photoMarkup(item)}<p class="card-content">${escape(item.content)}</p>${item.decision === 'archived' ? `<span class="status-pill">${t('archived')}</span>` : ''}`}${page === 'yearly' ? annualForm() : ''}<div class="card-bottom"><span>${t(flipped ? 'flipBack' : 'flip')}</span><span aria-hidden="true">↻</span></div></article></div><div class="card-meta"><span>${t('editHint')}</span><button class="text-button" id="edit-card">${t('edit')} <span aria-hidden="true">↗</span></button></div>`;
 }
 function renderCards(): string {
   const cards = queue();
   const item = current();
   const title = page === 'weekly' ? 'weeklyTitle' : page === 'yearly' ? 'yearlyTitle' : 'deckTitle';
   const intro = page === 'weekly' ? 'weeklyIntro' : page === 'yearly' ? 'yearlyIntro' : 'deckIntro';
-  return `<section class="review-page">${hero(title, intro)}${page === 'deck' ? `<div class="filters"><div class="filter-row"><label class="sr-only" for="sort">${t('sort')}</label><select id="sort"><option value="newest" ${filters.order === 'newest' ? 'selected' : ''}>${t('newest')}</option><option value="oldest" ${filters.order === 'oldest' ? 'selected' : ''}>${t('oldest')}</option></select><label class="checkbox-label"><input id="include-archived" type="checkbox" ${filters.archived ? 'checked' : ''}>${t('includeArchived')}</label></div><details ${filters.from || filters.to ? 'open' : ''}><summary>${t('period')}</summary><div class="date-filters"><label>${t('from')}<input type="date" id="from" value="${filters.from}"></label><label>${t('to')}<input type="date" id="to" value="${filters.to}"></label></div>${filters.from && filters.to && filters.from > filters.to ? `<p class="validation">${t('invalidRange')}</p>` : ''}<button id="reset-filters" class="text-button">${t('clear')}</button></details></div>` : `<div class="queue-label"><span class="queue-dot"></span><span>${cards.length} ${t('countUnit')} ${t('waiting')}</span></div>`}${item ? `${card(item)}${page === 'weekly' ? `<p class="gesture-hint">${t('weeklyHint')}</p><div class="decision-actions"><button class="secondary" id="archive" data-mutate>${t('archive')}</button><button class="primary" id="keep" data-mutate>✓ ${t('keep')}</button></div><button id="skip" class="text-button later">${t('skip')} ↓</button><p class="helper">${t('archiveNote')}</p>` : page === 'yearly' ? '' : `<div class="deck-navigation"><button id="previous" class="icon-button" aria-label="${t('prev')}" ${index === 0 ? 'disabled' : ''}>←</button><span class="deck-position">${index + 1} <span>/ ${cards.length}</span></span><button id="next" class="icon-button" aria-label="${t('next')}" ${index >= cards.length - 1 ? 'disabled' : ''}>→</button></div><div class="deck-progress" role="progressbar" aria-label="${t('deck')}" aria-valuenow="${index + 1}" aria-valuemin="0" aria-valuemax="${cards.length}"><span style="width:${(index + 1) / cards.length * 100}%"></span></div>`}` : emptyState()}</section>`;
+  return `<section class="review-page">${hero(title, intro)}${page === 'deck' ? `<div class="filters">${categorySelect('filter-category', filters.category, true)}<div class="filter-row"><label class="sr-only" for="sort">${t('sort')}</label><select id="sort"><option value="newest" ${filters.order === 'newest' ? 'selected' : ''}>${t('newest')}</option><option value="oldest" ${filters.order === 'oldest' ? 'selected' : ''}>${t('oldest')}</option></select><label class="checkbox-label"><input id="include-archived" type="checkbox" ${filters.archived ? 'checked' : ''}>${t('includeArchived')}</label></div><details ${filters.from || filters.to ? 'open' : ''}><summary>${t('period')}</summary><div class="date-filters"><label>${t('from')}<input type="date" id="from" value="${filters.from}"></label><label>${t('to')}<input type="date" id="to" value="${filters.to}"></label></div>${filters.from && filters.to && filters.from > filters.to ? `<p class="validation">${t('invalidRange')}</p>` : ''}<button id="reset-filters" class="text-button">${t('clear')}</button></details></div>` : `<div class="queue-label"><span class="queue-dot"></span><span>${cards.length} ${t('countUnit')} ${t('waiting')}</span></div>`}${item ? `${card(item)}${page === 'weekly' ? `<p class="gesture-hint">${t('weeklyHint')}</p><div class="decision-actions"><button class="secondary" id="archive" data-mutate>${t('archive')}</button><button class="primary" id="keep" data-mutate>✓ ${t('keep')}</button></div><button id="skip" class="text-button later">${t('skip')} ↓</button><p class="helper">${t('archiveNote')}</p>` : page === 'yearly' ? '' : `<button id="random-card" class="secondary random-button">${t('random')}</button><div class="deck-navigation"><button id="previous" class="icon-button" aria-label="${t('prev')}" ${index === 0 ? 'disabled' : ''}>←</button><span class="deck-position">${index + 1} <span>/ ${cards.length}</span></span><button id="next" class="icon-button" aria-label="${t('next')}" ${index >= cards.length - 1 ? 'disabled' : ''}>→</button></div><div class="deck-progress" role="progressbar" aria-label="${t('deck')}" aria-valuenow="${index + 1}" aria-valuemin="0" aria-valuemax="${cards.length}"><span style="width:${(index + 1) / cards.length * 100}%"></span></div>`}` : emptyState()}</section>`;
 }
 function emptyState(): string {
   const filtered = page === 'deck' && items.length > 0;
@@ -128,7 +133,7 @@ function emptyState(): string {
   return `<div class="empty-state">${plant}<h2>${t(title)}</h2><p>${t(body)}</p></div>`;
 }
 function renderSettings(): string {
-  return `<section class="settings-page">${hero('settingsTitle')}<section class="settings-block language-block"><label for="language">${t('language')}</label><select id="language"><option value="ja" ${settings.language === 'ja' ? 'selected' : ''}>日本語</option><option value="en" ${settings.language === 'en' ? 'selected' : ''}>English</option></select></section><section class="settings-block"><h2>${t('backupTitle')}</h2><p>${t('backup')}</p><div class="backup-actions"><button class="secondary" id="export">↓ ${t('export')}</button><button class="secondary" id="import" data-mutate>↑ ${t('import')}</button><input id="import-file" type="file" accept=".json,application/json" hidden></div><small>${t('importNote')}</small></section><section class="settings-block"><h2>${t('privacyTitle')}</h2><p>${t('privacy')}</p></section><section class="settings-block"><h2>${t('installTitle')}</h2><p>${t('install')}</p><p>${t('installData')}</p><p>${t('offline')}</p><div id="offline-status" role="status">${t(offlineState)}</div><div id="update-status" ${registration?.waiting ? '' : 'hidden'}><p>${t('update')} — ${t('updateNote')}</p><button class="secondary" id="update-app">${t('updateAction')}</button></div></section><p class="version">Life Discovery · 1.0</p></section>`;
+  return `<section class="settings-page">${hero('settingsTitle')}<section class="settings-block language-block"><label for="language">${t('language')}</label><select id="language"><option value="ja" ${settings.language === 'ja' ? 'selected' : ''}>日本語</option><option value="en" ${settings.language === 'en' ? 'selected' : ''}>English</option></select></section><section class="settings-block"><h2>${t('backupTitle')}</h2><p>${t('backup')}</p><div class="backup-actions"><button class="secondary" id="export">↓ ${t('export')}</button><button class="secondary" id="import" data-mutate>↑ ${t('import')}</button><input id="import-file" type="file" accept=".json,application/json" hidden></div><small>${t('importNote')}</small></section><section class="settings-block"><h2>${t('privacyTitle')}</h2><p>${t('privacy')}</p></section><section class="settings-block"><h2>${t('installTitle')}</h2><p>${t('install')}</p><p>${t('installData')}</p><p>${t('offline')}</p><div id="offline-status" role="status">${t(offlineState)}</div><div id="update-status" ${registration?.waiting ? '' : 'hidden'}><p>${t('update')} — ${t('updateNote')}</p><button class="secondary" id="update-app">${t('updateAction')}</button></div></section><p class="version">Life Discovery · 2.0</p></section>`;
 }
 function navigate(target: Page): void {
   if (busy || moving) return;
@@ -147,15 +152,16 @@ function bindCommon(): void {
   swipe(drawer, direction => { if (direction === 'left') drawer.close(); });
 }
 function bindNew(): void {
+  bindMetadata('new', draft);
   $('#content').addEventListener('input', event => { draft.content = (event.target as HTMLTextAreaElement).value; });
   $('#discovered-at').addEventListener('input', event => { draft.date = (event.target as HTMLInputElement).value; });
   $('#new-form').onsubmit = event => {
     event.preventDefault();
     if (!draft.content.trim() || !draft.date || !Number.isFinite(new Date(draft.date).getTime())) { showError('required'); return; }
     void perform(async () => {
-      const item = createDiscovery(draft.content, draft.date);
+      const item = { ...createDiscovery(draft.content, draft.date), category: draft.category, photo: draft.photo };
       await storage.saveDiscovery(item);
-      items.push(item); draft = { content: '', date: localInput() };
+      items.push(item); draft = emptyDraft();
       render(); notify('saved');
     });
   };
@@ -186,11 +192,11 @@ function saveReview(): void {
 function bindCards(): void {
   if (page === 'deck') {
     const filterChange = () => {
-      filters = { order: $<HTMLSelectElement>('#sort').value, archived: $<HTMLInputElement>('#include-archived').checked, from: $<HTMLInputElement>('#from').value, to: $<HTMLInputElement>('#to').value };
+      filters = { order: $<HTMLSelectElement>('#sort').value, archived: $<HTMLInputElement>('#include-archived').checked, from: $<HTMLInputElement>('#from').value, to: $<HTMLInputElement>('#to').value, category: $<HTMLSelectElement>('#filter-category').value };
       index = 0; flipped = false; render();
     };
-    ['#sort', '#include-archived', '#from', '#to'].forEach(selector => $(selector).addEventListener('change', filterChange));
-    $('#reset-filters').onclick = () => { filters = { order: 'newest', archived: false, from: '', to: '' }; index = 0; render(); };
+    ['#sort', '#include-archived', '#from', '#to', '#filter-category'].forEach(selector => $(selector).addEventListener('change', filterChange));
+    $('#reset-filters').onclick = () => { filters = { order: 'newest', archived: false, from: '', to: '', category: 'all' }; index = 0; render(); };
   }
   const item = current(); if (!item) return;
   let suppressClick = false;
@@ -232,6 +238,7 @@ function bindCards(): void {
     range.oninput = () => { reviewDraft.score = Number(range.value); $('#score-value').textContent = `${range.value}%`; range.setAttribute('aria-valuetext', `${range.value}%`); color(); };
     $('#review-comment').oninput = event => { reviewDraft.comment = (event.target as HTMLTextAreaElement).value; };
   } else {
+    $('#random-card').onclick = () => { const length = queue().length; advance(length > 1 ? 1 + Math.floor(Math.random() * (length - 1)) : 0); };
     $('#previous').onclick = () => advance(-1, false); $('#next').onclick = () => advance(1, false);
   }
 }
@@ -291,9 +298,11 @@ function swipe(element: HTMLElement, action: (direction: 'left' | 'right' | 'up'
 }
 function openEditor(item: Discovery): void {
   if (busy || moving) return;
+  const metadata = { category: item.category ?? 'other', photo: item.photo ?? null };
   const dialog = $<HTMLDialogElement>('#editor');
-  dialog.innerHTML = `<form id="edit-form"><div class="dialog-heading"><h2 id="edit-title">${t('editTitle')}</h2><button type="button" id="edit-close" class="icon-button" aria-label="${t('close')}">×</button></div><label for="edit-content">${t('content')}</label><textarea id="edit-content" rows="5" required>${escape(item.content)}</textarea><label for="edit-date">${t('date')}</label><input id="edit-date" type="datetime-local" required value="${localInput(new Date(item.discoveredAt))}"><p class="helper">${t(item.decision === 'archived' ? 'archived' : item.decision === 'kept' ? 'kept' : 'pending')}</p><button class="primary" type="submit">${t('save')}</button>${item.decision === 'archived' ? `<button id="restore" type="button" class="secondary" data-mutate>${t('restore')}</button>` : ''}<div class="dialog-footer"><button id="delete" type="button" class="danger text-button" data-mutate>${t('delete')}</button><button id="edit-cancel" type="button" class="text-button">${t('cancel')}</button></div></form>`;
+  dialog.innerHTML = `<form id="edit-form"><div class="dialog-heading"><h2 id="edit-title">${t('editTitle')}</h2><button type="button" id="edit-close" class="icon-button" aria-label="${t('close')}">×</button></div><label for="edit-content">${t('content')}</label><textarea id="edit-content" rows="5" required>${escape(item.content)}</textarea>${metadataFields('edit', metadata)}<label for="edit-date">${t('date')}</label><input id="edit-date" type="datetime-local" required value="${localInput(new Date(item.discoveredAt))}"><p class="helper">${t(item.decision === 'archived' ? 'archived' : item.decision === 'kept' ? 'kept' : 'pending')}</p><button class="primary" type="submit">${t('save')}</button>${item.decision === 'archived' ? `<button id="restore" type="button" class="secondary" data-mutate>${t('restore')}</button>` : ''}<div class="dialog-footer"><button id="delete" type="button" class="danger text-button" data-mutate>${t('delete')}</button><button id="edit-cancel" type="button" class="text-button">${t('cancel')}</button></div></form>`;
   dialog.showModal();
+  bindMetadata('edit', metadata);
   const close = () => { if (!busy) dialog.close(); };
   $('#edit-close').onclick = close; $('#edit-cancel').onclick = close;
   dialog.oncancel = event => { if (busy) event.preventDefault(); };
@@ -303,7 +312,7 @@ function openEditor(item: Discovery): void {
     const date = $<HTMLInputElement>('#edit-date').value;
     if (!content || !date || !Number.isFinite(new Date(date).getTime())) { showError('required'); return; }
     void perform(async () => {
-      const changed = { ...item, content, discoveredAt: date === localInput(new Date(item.discoveredAt)) ? item.discoveredAt : new Date(date).toISOString(), updatedAt: new Date().toISOString() };
+      const changed = { ...item, ...metadata, content, discoveredAt: date === localInput(new Date(item.discoveredAt)) ? item.discoveredAt : new Date(date).toISOString(), updatedAt: new Date().toISOString() };
       await storage.saveDiscovery(changed); updateItem(changed); dialog.close(); render(); notify('updated');
     });
   };
@@ -330,7 +339,7 @@ function bindSettings(): void {
   $('#export').onclick = () => {
     void perform(async () => {
       const data = await storage.readAll();
-      const backup: Backup = { schemaVersion: 1, exportedAt: new Date().toISOString(), discoveries: data.discoveries, settings: data.settings ?? settings };
+      const backup: Backup = { schemaVersion: 2, exportedAt: new Date().toISOString(), discoveries: data.discoveries.map(item => ({ ...item, category: item.category ?? 'other', photo: item.photo ?? null })), settings: data.settings ?? settings };
       const url = URL.createObjectURL(new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' }));
       const link = document.createElement('a'); link.href = url;
       link.download = `life-discovery-backup-${localInput().replace(/[:T]/g, '-')}.json`;
@@ -344,12 +353,12 @@ function bindSettings(): void {
     const file = input.files?.[0]; if (!file) return;
     void perform(async () => {
       let backup: Backup;
-      try { backup = parseBackup(await file.text()); }
+      try { backup = parseBackup(await file.text()); await validatePhotos(backup.discoveries); }
       catch { showError('invalidBackup'); input.value = ''; return; }
       if (!confirm(t('importConfirm'))) { input.value = ''; return; }
       await storage.replaceAll(backup);
       items = backup.discoveries; settings = backup.settings; index = 0;
-      draft = { content: '', date: localInput() }; reviewDraft = { score: 50, comment: '' };
+      draft = emptyDraft(); reviewDraft = { score: 50, comment: '' };
       render(); notify('importDone');
     });
   };
@@ -436,3 +445,74 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) refr
 window.addEventListener('focus', refreshDue);
 setInterval(refreshDue, 30000);
 void init();
+
+const categoryIcons: Record<Category, string> = { first: '✦', insight: '◎', emotion: '♡', achievement: '★', other: '◇' };
+function categoryLabel(item: Pick<Discovery, 'category'>): string {
+  const category = item.category ?? 'other';
+  return `${categoryIcons[category]} ${t(category)}`;
+}
+function categorySelect(id: string, value: string, all = false): string {
+  return `<label class="category-field" for="${id}">${t('category')}<select id="${id}">${all ? `<option value="all">${t('allCategories')}</option>` : ''}${categories.map(category => `<option value="${category}" ${category === value ? 'selected' : ''}>${categoryIcons[category]} ${t(category)}</option>`).join('')}</select></label>`;
+}
+function photoMarkup(item: Pick<Discovery, 'photo'>): string {
+  return item.photo ? `<img class="discovery-photo" src="${escape(item.photo)}" alt="${t('photo')}" draggable="false">` : '';
+}
+function metadataFields(prefix: string, item: Pick<Discovery, 'category' | 'photo'>): string {
+  return `<div class="metadata-fields">${categorySelect(`${prefix}-category`, item.category ?? 'other')}<label for="${prefix}-photo">${t('photo')}</label><input id="${prefix}-photo" type="file" accept="image/*"><p class="helper">${t('photoHelp')}</p><div id="${prefix}-preview">${photoMarkup(item)}</div><button id="${prefix}-remove-photo" type="button" class="text-button" ${item.photo ? '' : 'hidden'}>${t('removePhoto')}</button></div>`;
+}
+function bindMetadata(prefix: string, item: Pick<Discovery, 'category' | 'photo'>): void {
+  $(`#${prefix}-category`).onchange = event => { item.category = (event.target as HTMLSelectElement).value as Category; };
+  const input = $<HTMLInputElement>(`#${prefix}-photo`);
+  const update = () => { $(`#${prefix}-preview`).innerHTML = photoMarkup(item); $(`#${prefix}-remove-photo`).hidden = !item.photo; };
+  input.onchange = () => {
+    const file = input.files?.[0]; if (!file) return;
+    void perform(async () => {
+      try { item.photo = await preparePhoto(file); update(); }
+      catch { showError('photoError'); }
+      finally { input.value = ''; }
+    });
+  };
+  $(`#${prefix}-remove-photo`).onclick = () => { if (busy) return; item.photo = null; update(); };
+}
+function renderCalendar(): string {
+  const year = calendarMonth.getFullYear(), month = calendarMonth.getMonth();
+  const label = new Intl.DateTimeFormat(settings.language, { year: 'numeric', month: 'long' }).format(calendarMonth);
+  const days = new Date(year, month + 1, 0).getDate();
+  const weekday = new Intl.DateTimeFormat(settings.language, { weekday: 'short' });
+  const dayItems = items.filter(item => localInput(new Date(item.discoveredAt)).slice(0, 10) === selectedDay)
+    .sort((a, b) => Date.parse(a.discoveredAt) - Date.parse(b.discoveredAt));
+  return `<section>${hero('calendarTitle')}<div class="month-navigation"><button id="previous-month" class="secondary" aria-label="${t('previousMonth')}">‹</button><h2 aria-live="polite">${label}</h2><button id="next-month" class="secondary" aria-label="${t('nextMonth')}">›</button></div><div class="calendar-grid">${Array.from({ length: 7 }, (_, i) => `<span class="weekday">${weekday.format(new Date(2023, 0, 1 + i))}</span>`).join('')}${'<span></span>'.repeat(calendarMonth.getDay())}${Array.from({ length: days }, (_, i) => {
+    const date = localInput(new Date(year, month, i + 1)).slice(0, 10);
+    const records = items.filter(item => localInput(new Date(item.discoveredAt)).slice(0, 10) === date);
+    return `<button class="calendar-day" data-day="${date}" aria-pressed="${date === selectedDay}" aria-label="${date}: ${records.length} ${t('countUnit')}"><span>${i + 1}</span><span class="day-marks">${records.map(item => `<span class="category-mark ${item.decision === 'archived' ? 'archived' : ''}" title="${categoryLabel(item)}" aria-label="${categoryLabel(item)}">${categoryIcons[item.category ?? 'other']}</span>`).join('')}</span></button>`;
+  }).join('')}</div><h2 class="selected-date">${selectedDay}</h2><div class="calendar-list">${dayItems.length ? dayItems.map(item => `<div class="calendar-entry"><article class="discovery-card ${item.decision === 'archived' ? 'archived' : ''}" tabindex="0" role="button" aria-pressed="false" data-calendar-id="${escape(item.id)}" aria-label="${escape(item.content)}. ${t('flip')}"><div class="calendar-front"><div class="card-topline">${categoryLabel(item)} · ${dateLabel(item.discoveredAt)}</div>${photoMarkup(item)}<p class="card-content">${escape(item.content)}</p></div><div class="calendar-back" hidden><p class="status-pill">${t(item.decision === 'pending' ? 'pending' : item.decision === 'kept' ? 'kept' : 'archived')}</p>${item.review ? `<p>${item.review.score}%</p><p class="card-content">${escape(item.review.comment)}</p>` : `<p>${t('notReviewed')}</p>`}</div><div class="card-bottom">${t('flip')}</div></article><button class="text-button" data-calendar-edit="${escape(item.id)}">${t('edit')}</button></div>`).join('') : `<p class="helper">${t('noDay')}</p>`}</div></section>`;
+}
+function bindCalendar(): void {
+  const changeMonth = (delta: number) => {
+    calendarMonth = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + delta, 1);
+    selectedDay = localInput(calendarMonth).slice(0, 10); render();
+  };
+  $('#previous-month').onclick = () => changeMonth(-1);
+  $('#next-month').onclick = () => changeMonth(1);
+  document.querySelectorAll<HTMLElement>('[data-day]').forEach(button => { button.onclick = () => { selectedDay = button.dataset.day!; render(); }; });
+  document.querySelectorAll<HTMLElement>('[data-calendar-edit]').forEach(button => { button.onclick = () => { const item = items.find(item => item.id === button.dataset.calendarEdit); if (item) openEditor(item); }; });
+  document.querySelectorAll<HTMLElement>('[data-calendar-id]').forEach(element => {
+    const flip = async () => {
+      if (moving || busy) return;
+      moving = true; app.inert = true;
+      await animateCard(element, [{ transform: 'rotateY(0)' }, { transform: 'rotateY(-90deg)' }], 160);
+      const front = $<HTMLElement>('.calendar-front', element), back = $<HTMLElement>('.calendar-back', element);
+      front.hidden = !front.hidden; back.hidden = !back.hidden;
+      element.classList.toggle('flipped', front.hidden); element.setAttribute('aria-pressed', String(front.hidden));
+      $('.card-bottom', element).textContent = t(front.hidden ? 'flipBack' : 'flip');
+      const item = items.find(item => item.id === element.dataset.calendarId)!;
+      element.setAttribute('aria-label', `${front.hidden ? back.textContent : item.content}. ${t(front.hidden ? 'flipBack' : 'flip')}`);
+      await animateCard(element, [{ transform: 'rotateY(90deg)' }, { transform: 'rotateY(0)' }], 180);
+      moving = false; app.inert = false; element.focus({ preventScroll: true });
+    };
+    let suppress = false;
+    swipe(element, () => {}, () => { suppress = true; const item = items.find(item => item.id === element.dataset.calendarId); if (item) openEditor(item); }, () => { suppress = false; }, () => { suppress = true; });
+    element.onclick = () => { if (!suppress) void flip(); };
+    element.onkeydown = event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); void flip(); } };
+  });
+}

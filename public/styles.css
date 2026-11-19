@@ -1179,3 +1179,25 @@ body {
 .discovery-card #review-comment { background: #f6faee; }
 .discovery-card #review-form .secondary { background: #e7f0dc; border-color: #789263; }
 .discovery-card:has(#review-form) .card-content { margin-bottom: 22px; }
+
+.category-field { display: grid; gap: 6px; margin: 12px 0; font-size: .875rem; }
+.category-field select { width: 100%; font-size: 1rem; }
+.metadata-fields { border-top: 1px solid var(--line); padding: 10px 0; }
+.metadata-fields input[type=file] { display: block; width: 100%; font-size: .875rem; margin-top: 8px; }
+.discovery-photo { display: block; width: 100%; max-height: 280px; object-fit: contain; border-radius: 12px; margin: 16px 0; background: #ffffff66; }
+.category-tag { font-size: .875rem; }
+.card-topline { flex-wrap: wrap; }
+.random-button { display: block; margin: 20px auto 0; }
+.month-navigation { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 20px; }
+.calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.weekday { text-align: center; font-size: .875rem; padding: 6px 0; }
+.calendar-day { min-height: 64px; padding: 5px 2px; border-radius: 8px; background: #e2ebd7; align-content: start; border: 2px solid transparent; }
+.calendar-day[aria-pressed=true] { border-color: #526d4c; background: #c2d6ac; }
+.day-marks { display: flex; flex-wrap: wrap; gap: 2px; justify-content: center; }
+.category-mark { font-size: .75rem; line-height: 1.4; background: #f7faef; border-radius: 3px; padding: 0 2px; }
+.category-mark.archived { color: #777; background: #d4d8d0; }
+.selected-date { margin: 30px 0 18px; }
+.calendar-entry { margin-bottom: 24px; perspective: 1000px; }
+.calendar-entry .discovery-card { min-height: 180px; }
+.calendar-entry .card-content { margin: 18px 0; }
+.calendar-entry .text-button { display: block; margin-left: auto; }

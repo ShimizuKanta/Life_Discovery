@@ -26,9 +26,10 @@ async function importData(page, data, accept = true) {
 }
 async function gesture(page, direction) {
   const card = page.locator('#discovery-card');
-  await card.scrollIntoViewIfNeeded();
-  const box = await card.boundingBox();
-  const start = { x: box.x + box.width / 2, y: box.y + 130 };
+  const header = card.locator('.card-topline');
+  await header.evaluate(element => element.scrollIntoView({ block: 'center', behavior: 'instant' }));
+  const box = await header.boundingBox();
+  const start = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
   const end = { x: start.x + (direction === 'left' ? -90 : direction === 'right' ? 90 : 0), y: start.y + (direction === 'up' ? -90 : 0) };
   const session = await page.context().newCDPSession(page);
   await session.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [start] });
@@ -108,7 +109,7 @@ test('touch swipes judge, skip without losing records, and navigate cards', asyn
 test('backup validation and cancellation preserve data, valid restore replaces settings and records', async ({ page }) => {
   await add(page, '<img src=x onerror=alert(1)>');
   const data = await exportData(page);
-  expect(data.schemaVersion).toBe(1);
+  expect(data.schemaVersion).toBe(2);
   await page.locator('#import-file').setInputFiles({ name: 'bad.json', mimeType: 'application/json', buffer: Buffer.from('{"schemaVersion":99}') });
   await expect(page.locator('#error')).toContainText('形式が正しくない');
   await page.locator('#error button').click();
@@ -188,8 +189,10 @@ test('menu edge gesture, long press, keyboard and narrow viewport remain usable'
   await session.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
   await expect(page.locator('#drawer')).toBeVisible();
   await page.locator('#drawer [data-page="deck"]').click();
-  const box = await page.locator('#discovery-card').boundingBox();
-  await page.mouse.move(box.x + 100, box.y + 100);
+  const header = page.locator('#discovery-card .card-topline');
+  await header.evaluate(element => element.scrollIntoView({ block: 'center', behavior: 'instant' }));
+  const box = await header.boundingBox();
+  await page.mouse.move(box.x + 50, box.y + box.height / 2);
   await page.mouse.down();
   await expect(page.locator('#editor')).toBeVisible();
   await page.mouse.up();
@@ -311,4 +314,67 @@ test('cards follow small drags, spring back, flip in 3D and keep annual controls
   await expect(card).not.toHaveClass(/flipped/);
   await expect(page.locator('#score')).toHaveValue('81');
   await page.screenshot({ path: 'test-results/annual-card.png', fullPage: true });
+});
+
+test('v2 photos, category filters, random cards, calendar and offline backup round trip', async ({ page, context }) => {
+  await page.clock.install({ time: new Date('2026-11-19T03:00:00Z') });
+  await page.reload();
+  await page.locator('#new-category').selectOption('first');
+  await page.locator('#new-photo').setInputFiles('public/icons/icon-192.png');
+  await expect(page.locator('#new-preview img')).toBeVisible();
+  await add(page, '写真付きの初体験', '2026-11-18T12:00');
+  await page.locator('#new-category').selectOption('insight');
+  await add(page, '同じ日の気づき', '2026-11-18T15:00');
+  await add(page, '今日の発見', '2026-11-19T12:00');
+  await go(page, 'deck');
+  await page.locator('#filter-category').selectOption('first');
+  await expect(page.locator('#discovery-card')).toContainText('写真付きの初体験');
+  await expect(page.locator('#discovery-card img')).toBeVisible();
+  await expect(page.locator('.deck-position')).toHaveText('1 / 1');
+  await page.locator('#random-card').click();
+  await expect(page.locator('.deck-position')).toHaveText('1 / 1');
+  await page.locator('#filter-category').selectOption('all');
+  const original = await page.locator('#discovery-card .card-content').textContent();
+  await page.locator('#random-card').click();
+  await expect(page.locator('#discovery-card .card-content')).not.toHaveText(original);
+  await go(page, 'calendar');
+  await page.locator('[data-day="2026-11-18"]').click();
+  await expect(page.locator('.calendar-entry')).toHaveCount(2);
+  await expect(page.locator('[data-day="2026-11-18"] .category-mark')).toHaveCount(2);
+  await page.locator('.calendar-entry .discovery-card').first().click();
+  await expect(page.locator('.calendar-entry .discovery-card').first()).toHaveAttribute('aria-pressed', 'true');
+  await page.locator('#previous-month').click();
+  await expect(page.locator('[data-day="2026-10-01"]')).toBeVisible();
+  await page.locator('#next-month').click();
+  await page.locator('[data-day="2026-11-18"]').click();
+  await page.evaluate(async () => { await navigator.serviceWorker.ready; });
+  await context.setOffline(true);
+  const backup = await exportData(page);
+  expect(backup.schemaVersion).toBe(2);
+  expect(backup.discoveries.find(item => item.content === '写真付きの初体験').photo).toMatch(/^data:image\/jpeg;base64,/);
+  await go(page, 'calendar');
+  await page.locator('[data-calendar-edit]').first().click();
+  await page.locator('#edit-remove-photo').click();
+  await page.locator('#edit-category').selectOption('achievement');
+  await page.locator('#edit-form button[type=submit]').click();
+  expect((await exportData(page)).discoveries.find(item => item.content === '写真付きの初体験').photo).toBeNull();
+  await importData(page, backup);
+  await page.reload();
+  await go(page, 'deck');
+  await page.locator('#filter-category').selectOption('first');
+  await expect(page.locator('#discovery-card img')).toBeVisible();
+  await page.screenshot({ path: 'test-results/version2-photo.png', fullPage: true });
+});
+
+test('v1 backups upgrade without losing answers and invalid v2 photos do not replace data', async ({ page }) => {
+  await add(page, '第1版の発見');
+  const data = await exportData(page);
+  const legacy = { ...data, schemaVersion: 1, discoveries: data.discoveries.map(({ category: _category, photo: _photo, ...item }) => item) };
+  await importData(page, legacy);
+  const upgraded = await exportData(page);
+  expect(upgraded.discoveries[0]).toEqual({ ...legacy.discoveries[0], category: 'other', photo: null });
+  await page.locator('#import-file').setInputFiles({ name: 'bad-photo.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify({ ...upgraded, discoveries: [{ ...upgraded.discoveries[0], photo: 'data:image/jpeg;base64,/9j/AAAA' }] })) });
+  await expect(page.locator('#error')).toContainText('形式が正しくない');
+  await page.locator('#error button').click();
+  expect((await exportData(page)).discoveries).toEqual(upgraded.discoveries);
 });

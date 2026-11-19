@@ -1,5 +1,10 @@
 import type { Language } from './core.js';
 const ja = {
+  calendar: 'カレンダー', calendarTitle: '発見のある日々。', previousMonth: '前の月', nextMonth: '次の月', noDay: 'この日の発見はありません。',
+  category: '種類', allCategories: '全カテゴリ', first: '初めて', insight: '気づき', emotion: '感動', achievement: '達成', other: 'その他',
+  photo: '写真（任意・1枚）', removePhoto: '写真を外す', photoHelp: '20MBまで。端末内で長辺1600pxのJPEGに縮小して保存します。', photoError: '写真を読み込めません。20MB以下の対応画像（JPEG・PNGなど）を選んでください。',
+  random: 'ランダムに出会う', voiceHint: '音声入力は端末の標準キーボードのマイクから利用できます。',
+
   tagline: '日々の小さな発見を、未来の自分へ。', new: '発見を記録', weekly: '1週間後の判定', yearly: '1年後の振り返り', deck: '発見のカードデッキ', settings: '設定',
   menu: 'メニューを開く', close: '閉じる', add: '＋ 発見', waiting: '待ち',
   eyebrow: 'A LITTLE DISCOVERY', title: '今日、どんな発見が\nありましたか？', intro: '初めてのこと。心が動いたこと。\n忘れたくない小さな気づきを、ひとつ。',
@@ -20,6 +25,11 @@ const ja = {
 };
 export type MessageKey = keyof typeof ja;
 const en: Record<MessageKey, string> = {
+  calendar: 'Calendar', calendarTitle: 'Days of discovery.', previousMonth: 'Previous month', nextMonth: 'Next month', noDay: 'No discoveries on this day.',
+  category: 'Category', allCategories: 'All categories', first: 'First experience', insight: 'Insight', emotion: 'Moved', achievement: 'Achievement', other: 'Other',
+  photo: 'Photo (optional, one)', removePhoto: 'Remove photo', photoHelp: 'Up to 20 MB. Resized on-device to a JPEG with a maximum side of 1600 px.', photoError: 'Could not read this photo. Choose a supported image (such as JPEG or PNG) under 20 MB.',
+  random: 'Discover at random', voiceHint: 'For voice input, use the microphone on your device’s standard keyboard.',
+
   tagline: 'Little discoveries, for your future self.', new: 'New discovery', weekly: 'One-week check-in', yearly: 'One-year reflection', deck: 'Discovery deck', settings: 'Settings',
   menu: 'Open menu', close: 'Close', add: '+ Discovery', waiting: 'waiting',
   eyebrow: 'A LITTLE DISCOVERY', title: 'What did you\ndiscover today?', intro: 'A first experience. A moment that moved you.\nOne little thing you want to remember.',

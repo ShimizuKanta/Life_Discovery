@@ -1,6 +1,10 @@
+export const categories = ['first', 'insight', 'emotion', 'achievement', 'other'] as const;
+export type Category = typeof categories[number];
 export type Language = 'ja' | 'en';
 export type Decision = 'pending' | 'kept' | 'archived';
 export interface Discovery {
+  category?: Category;
+  photo?: string | null;
   id: string;
   content: string;
   discoveredAt: string;
@@ -11,7 +15,7 @@ export interface Discovery {
   review: { score: number; comment: string; reviewedAt: string } | null;
 }
 export interface Settings { language: Language }
-export interface Backup { schemaVersion: 1; exportedAt: string; discoveries: Discovery[]; settings: Settings }
+export interface Backup { schemaVersion: 1 | 2; exportedAt: string; discoveries: Discovery[]; settings: Settings }
 
 export function localInput(date = new Date()): string {
   const pad = (n: number) => String(n).padStart(2, '0');
@@ -39,10 +43,10 @@ export function decide(item: Discovery, decision: Exclude<Decision, 'pending'>):
   const now = new Date().toISOString();
   return { ...item, decision, decidedAt: now, updatedAt: now };
 }
-export function filterDeck(items: Discovery[], order: string, archived: boolean, from: string, to: string): Discovery[] {
+export function filterDeck(items: Discovery[], order: string, archived: boolean, from: string, to: string, category = 'all'): Discovery[] {
   return items.filter(item => {
     const day = localInput(new Date(item.discoveredAt)).slice(0, 10);
-    return (archived || item.decision !== 'archived') && (!from || day >= from) && (!to || day <= to);
+    return (category === 'all' || (item.category ?? 'other') === category) && (archived || item.decision !== 'archived') && (!from || day >= from) && (!to || day <= to);
   }).sort((a, b) => (new Date(a.discoveredAt).getTime() - new Date(b.discoveredAt).getTime()) * (order === 'oldest' ? 1 : -1));
 }
 function object(value: unknown): value is Record<string, unknown> {
@@ -55,7 +59,7 @@ function timestamp(value: unknown): value is string {
 export function parseBackup(raw: string): Backup {
   const value: unknown = JSON.parse(raw);
   const fail = (): never => { throw new Error('Invalid backup'); };
-  if (!object(value) || value.schemaVersion !== 1 || !timestamp(value.exportedAt)
+  if (!object(value) || (value.schemaVersion !== 1 && value.schemaVersion !== 2) || !timestamp(value.exportedAt)
     || !object(value.settings) || !['ja', 'en'].includes(String(value.settings.language)) || !Array.isArray(value.discoveries)) return fail();
   const ids = new Set<string>();
   const discoveries: Discovery[] = value.discoveries.map((item: unknown) => {
@@ -68,10 +72,13 @@ export function parseBackup(raw: string): Backup {
     const review = item.review;
     if (review !== null && (!object(review) || typeof review.score !== 'number' || !Number.isInteger(review.score)
       || review.score < 0 || review.score > 100 || typeof review.comment !== 'string' || !timestamp(review.reviewedAt))) return fail();
+    if (value.schemaVersion === 2 && (!categories.includes(item.category as Category)
+      || !(item.photo === null || (typeof item.photo === 'string' && item.photo.length <= 3 * 1024 * 1024
+        && /^data:image\/jpeg;base64,\/9j\/[A-Za-z0-9+/]*={0,2}$/.test(item.photo))))) return fail();
     ids.add(item.id);
-    return { id: item.id, content: item.content, discoveredAt: item.discoveredAt, createdAt: item.createdAt,
+    return { ...(value.schemaVersion === 2 ? { category: item.category as Category, photo: item.photo as string | null } : {}), id: item.id, content: item.content, discoveredAt: item.discoveredAt, createdAt: item.createdAt,
       updatedAt: item.updatedAt, decision: item.decision as Decision, decidedAt: item.decidedAt,
       review: review === null ? null : { score: review.score as number, comment: review.comment as string, reviewedAt: review.reviewedAt as string } };
   });
-  return { schemaVersion: 1, exportedAt: value.exportedAt, settings: { language: value.settings.language as Language }, discoveries };
+  return { schemaVersion: value.schemaVersion as 1 | 2, exportedAt: value.exportedAt, settings: { language: value.settings.language as Language }, discoveries };
 }

@@ -63,3 +63,16 @@ test('deck respects archive visibility, inclusive local date filters and sort', 
   assert.equal(filterDeck([one, two, archived], 'oldest', true, '', '').length, 3);
   assert.deepEqual(filterDeck([one, two], 'oldest', false, '2025-01-02', '2025-01-02'), [two]);
 });
+
+test('v2 validates categories and photo data while v1 remains readable', () => {
+  const old = backup();
+  assert.deepEqual(parseBackup(JSON.stringify(old)), old);
+  const data = { ...old, schemaVersion: 2, discoveries: old.discoveries.map(item => ({ ...item, category: 'insight', photo: null })) };
+  assert.deepEqual(parseBackup(JSON.stringify(data)), data);
+  for (const photo of ['https://example.com/photo.jpg', 'data:image/svg+xml;base64,AA==', 'not a photo', 42]) {
+    assert.throws(() => parseBackup(JSON.stringify({ ...data, discoveries: [{ ...data.discoveries[0], photo }] })));
+  }
+  assert.throws(() => parseBackup(JSON.stringify({ ...data, discoveries: [{ ...data.discoveries[0], category: 'invalid' }] })));
+  assert.equal(filterDeck(data.discoveries, 'newest', false, '', '', 'insight').length, 1);
+  assert.equal(filterDeck(data.discoveries, 'newest', false, '', '', 'first').length, 0);
+});
