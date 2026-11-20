@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="202" height="50" viewBox="0 0 202 50">
+  <title>アプリを開く</title>
+  <rect width="202" height="50" rx="12" fill="#435d3f"/>
+  <text x="24" y="32" fill="white" font-family="system-ui, sans-serif" font-size="20" font-weight="600">アプリを開く</text>
+  <path d="M164 25h15m-6-6 6 6-6 6" fill="none" stroke="#e3efd8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
