@@ -43,10 +43,10 @@ export function decide(item: Discovery, decision: Exclude<Decision, 'pending'>):
   const now = new Date().toISOString();
   return { ...item, decision, decidedAt: now, updatedAt: now };
 }
-export function filterDeck(items: Discovery[], order: string, archived: boolean, from: string, to: string, category = 'all'): Discovery[] {
+export function filterDeck(items: Discovery[], order: string, archived: boolean, from: string, to: string, selectedCategories: readonly Category[] = categories): Discovery[] {
   return items.filter(item => {
     const day = localInput(new Date(item.discoveredAt)).slice(0, 10);
-    return (category === 'all' || (item.category ?? 'other') === category) && (archived || item.decision !== 'archived') && (!from || day >= from) && (!to || day <= to);
+    return selectedCategories.includes(item.category ?? 'other') && (archived || item.decision !== 'archived') && (!from || day >= from) && (!to || day <= to);
   }).sort((a, b) => (new Date(a.discoveredAt).getTime() - new Date(b.discoveredAt).getTime()) * (order === 'oldest' ? 1 : -1));
 }
 function object(value: unknown): value is Record<string, unknown> {

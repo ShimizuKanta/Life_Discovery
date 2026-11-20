@@ -21,7 +21,8 @@ let draft = emptyDraft();
 let calendarMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
 let selectedDay = localInput().slice(0, 10);
 let reviewDraft = { score: 50, comment: '' };
-let filters = { order: 'newest', archived: false, from: '', to: '', category: 'all' };
+const defaultFilters = () => ({ order: 'newest', archived: false, from: '', to: '', categories: [...categories] });
+let filters = defaultFilters();
 let toastTimer: ReturnType<typeof setTimeout>;
 let offlineState: 'offlineReady' | 'offlinePreparing' | 'offlineUnavailable' = 'offlinePreparing';
 let registration: ServiceWorkerRegistration | undefined;
@@ -34,7 +35,7 @@ const dateLabel = (value: string): string => new Intl.DateTimeFormat(settings.la
 const plant = '<svg class="plant" viewBox="0 0 140 140" fill="none" aria-hidden="true"><circle cx="70" cy="70" r="65" fill="#e8eddc"/><path d="M70 112V63" stroke="#5c7853" stroke-width="3" stroke-linecap="round"/><path d="M69 85C36 86 27 64 29 46c28-2 46 15 40 39Z" fill="#a3b88e"/><path d="M70 69C67 38 88 27 112 29c0 26-15 43-42 40Z" fill="#77956b"/><path d="m72 66 24-22M67 80 43 59" stroke="#f5f6ee" stroke-width="1.5" stroke-linecap="round"/></svg>';
 
 function queue(): Discovery[] {
-  if (page === 'deck') return filterDeck(items, filters.order, filters.archived, filters.from, filters.to, filters.category);
+  if (page === 'deck') return filterDeck(items, filters.order, filters.archived, filters.from, filters.to, filters.categories);
   return items.filter(item => page === 'weekly' ? weeklyDue(item) : yearlyDue(item))
     .sort((a, b) => Date.parse(a.discoveredAt) - Date.parse(b.discoveredAt));
 }
@@ -189,7 +190,7 @@ function renderCards(): string {
   const item = current();
   const title = page === 'weekly' ? 'weeklyTitle' : page === 'yearly' ? 'yearlyTitle' : 'deckTitle';
   const intro = page === 'weekly' ? 'weeklyIntro' : page === 'yearly' ? 'yearlyIntro' : 'deckIntro';
-  return `<section class="review-page">${hero(title, intro)}${page === 'deck' ? `<div class="filters">${categoryButtons('filter-category', filters.category, true)}<div class="filter-row"><label class="sr-only" for="sort">${t('sort')}</label><select id="sort"><option value="newest" ${filters.order === 'newest' ? 'selected' : ''}>${t('newest')}</option><option value="oldest" ${filters.order === 'oldest' ? 'selected' : ''}>${t('oldest')}</option></select><label class="checkbox-label"><input id="include-archived" type="checkbox" ${filters.archived ? 'checked' : ''}>${t('includeArchived')}</label></div><details ${filters.from || filters.to ? 'open' : ''}><summary>${t('period')}</summary><div class="date-filters"><label>${t('from')}<input type="date" id="from" value="${filters.from}"></label><label>${t('to')}<input type="date" id="to" value="${filters.to}"></label></div>${filters.from && filters.to && filters.from > filters.to ? `<p class="validation">${t('invalidRange')}</p>` : ''}<button id="reset-filters" class="text-button">${t('clear')}</button></details></div>` : `<div class="queue-label"><span class="queue-dot"></span><span>${cards.length} ${t('countUnit')} ${t('waiting')}</span></div>`}${item ? `${card(item)}${page === 'weekly' ? `<p class="gesture-hint">${t('weeklyHint')}</p><div class="decision-actions"><button class="secondary" id="archive" data-mutate>${t('archive')}</button><button class="primary" id="keep" data-mutate>✓ ${t('keep')}</button></div><button id="skip" class="text-button later">${t('skip')} ↓</button><p class="helper">${t('archiveNote')}</p>` : page === 'yearly' ? '' : `<button id="random-card" class="secondary random-button">${t('random')}</button><div class="deck-navigation"><button id="previous" class="icon-button" aria-label="${t('prev')}" ${index === 0 ? 'disabled' : ''}>←</button><span class="deck-position">${index + 1} <span>/ ${cards.length}</span></span><button id="next" class="icon-button" aria-label="${t('next')}" ${index >= cards.length - 1 ? 'disabled' : ''}>→</button></div><div class="deck-progress" role="progressbar" aria-label="${t('deck')}" aria-valuenow="${index + 1}" aria-valuemin="0" aria-valuemax="${cards.length}"><span style="width:${(index + 1) / cards.length * 100}%"></span></div>`}` : emptyState()}</section>`;
+  return `<section class="review-page">${hero(title, intro)}${page === 'deck' ? `<div class="filters">${categoryButtons('filter-category', filters.categories)}<div class="filter-row"><label class="sr-only" for="sort">${t('sort')}</label><select id="sort"><option value="newest" ${filters.order === 'newest' ? 'selected' : ''}>${t('newest')}</option><option value="oldest" ${filters.order === 'oldest' ? 'selected' : ''}>${t('oldest')}</option></select><label class="checkbox-label"><input id="include-archived" type="checkbox" ${filters.archived ? 'checked' : ''}>${t('includeArchived')}</label></div><details ${filters.from || filters.to ? 'open' : ''}><summary>${t('period')}</summary><div class="date-filters"><label>${t('from')}<input type="date" id="from" value="${filters.from}"></label><label>${t('to')}<input type="date" id="to" value="${filters.to}"></label></div>${filters.from && filters.to && filters.from > filters.to ? `<p class="validation">${t('invalidRange')}</p>` : ''}<button id="reset-filters" class="text-button">${t('clear')}</button></details></div>` : `<div class="queue-label"><span class="queue-dot"></span><span>${cards.length} ${t('countUnit')} ${t('waiting')}</span></div>`}${item ? `${card(item)}${page === 'weekly' ? `<p class="gesture-hint">${t('weeklyHint')}</p><div class="decision-actions"><button class="secondary" id="archive" data-mutate>${t('archive')}</button><button class="primary" id="keep" data-mutate>✓ ${t('keep')}</button></div><button id="skip" class="text-button later">${t('skip')} ↓</button><p class="helper">${t('archiveNote')}</p>` : page === 'yearly' ? '' : `<button id="random-card" class="secondary random-button">${t('random')}</button><div class="deck-navigation"><button id="previous" class="icon-button" aria-label="${t('prev')}" ${index === 0 ? 'disabled' : ''}>←</button><span class="deck-position">${index + 1} <span>/ ${cards.length}</span></span><button id="next" class="icon-button" aria-label="${t('next')}" ${index >= cards.length - 1 ? 'disabled' : ''}>→</button></div><div class="deck-progress" role="progressbar" aria-label="${t('deck')}" aria-valuenow="${index + 1}" aria-valuemin="0" aria-valuemax="${cards.length}"><span style="width:${(index + 1) / cards.length * 100}%"></span></div>`}` : emptyState()}</section>`;
 }
 function emptyState(): string {
   const filtered = page === 'deck' && items.length > 0;
@@ -256,13 +257,23 @@ function saveReview(): void {
 }
 function bindCards(): void {
   if (page === 'deck') {
-    bindCategory('filter-category');
+    const filterGroup = $('#filter-category');
+    filterGroup.querySelectorAll<HTMLButtonElement>('[data-category]').forEach(button => {
+      button.onclick = () => {
+        const category = button.dataset.category as Category;
+        filters.categories = filters.categories.includes(category)
+          ? filters.categories.filter(selected => selected !== category)
+          : [...filters.categories, category];
+        index = 0; flipped = false; render();
+        $(`#filter-category [data-category="${category}"]`).focus({ preventScroll: true });
+      };
+    });
     const filterChange = () => {
-      filters = { order: $<HTMLSelectElement>('#sort').value, archived: $<HTMLInputElement>('#include-archived').checked, from: $<HTMLInputElement>('#from').value, to: $<HTMLInputElement>('#to').value, category: $('#filter-category').dataset.value! };
+      filters = { order: $<HTMLSelectElement>('#sort').value, archived: $<HTMLInputElement>('#include-archived').checked, from: $<HTMLInputElement>('#from').value, to: $<HTMLInputElement>('#to').value, categories: filters.categories };
       index = 0; flipped = false; render();
     };
-    ['#sort', '#include-archived', '#from', '#to', '#filter-category'].forEach(selector => $(selector).addEventListener('change', filterChange));
-    $('#reset-filters').onclick = () => { filters = { order: 'newest', archived: false, from: '', to: '', category: 'all' }; index = 0; render(); };
+    ['#sort', '#include-archived', '#from', '#to'].forEach(selector => $(selector).addEventListener('change', filterChange));
+    $('#reset-filters').onclick = () => { filters = defaultFilters(); index = 0; render(); };
   }
   const item = current(); if (!item) return;
   let suppressClick = false;
@@ -527,8 +538,12 @@ function categoryLabel(item: Pick<Discovery, 'category'>): string {
   const category = item.category ?? 'other';
   return `${categoryIcons[category]} ${t(category)}`;
 }
-function categoryButtons(id: string, value: string, all = false): string {
-  return `<fieldset class="category-field" id="${id}" data-value="${value}"><legend>${t('category')}</legend><div class="category-buttons">${categories.map(category => `<button type="button" data-category="${category}" aria-pressed="${category === value}"><span aria-hidden="true">${categoryIcons[category]}</span><span>${t(category)}</span></button>`).join('')}</div>${all ? `<button type="button" class="all-categories" data-category="all" aria-pressed="${value === 'all'}">${t('allCategories')}</button>` : ''}</fieldset>`;
+function categoryButtons(id: string, selection: readonly Category[]): string {
+  return `<fieldset class="category-field" id="${id}" data-value="${selection[0] ?? ''}">
+    <legend>${t('category')}</legend>
+    <div class="category-buttons">${categories.map(category => `<button type="button" data-category="${category}" aria-pressed="${selection.includes(category)}">
+      <span aria-hidden="true">${categoryIcons[category]}</span><span>${t(category)}</span></button>`).join('')}</div>
+  </fieldset>`;
 }
 function bindCategory(id: string): void {
   const group = $(`#${id}`);
@@ -553,7 +568,7 @@ function photoHelp(): string {
   return `<p class="helper photo-help">${t('photoHelp')} ${t('cameraHelp')}</p>`;
 }
 function metadataFields(prefix: string, item: Pick<Discovery, 'category' | 'photo'>): string {
-  return `<div class="metadata-fields">${categoryButtons(`${prefix}-category`, item.category ?? 'other')}<p class="photo-label">${t('photo')}</p><div class="photo-actions"><button type="button" id="${prefix}-choose-photo" class="secondary" data-mutate>${photoIcon('gallery')}${t('choosePhoto')}</button><button type="button" id="${prefix}-take-photo" class="secondary" data-mutate>${photoIcon('camera')}${t('takePhoto')}</button></div><input id="${prefix}-photo" type="file" accept="image/*" aria-label="${t('choosePhoto')}" hidden><input id="${prefix}-camera" type="file" accept="image/*" capture="environment" aria-label="${t('takePhoto')}" hidden><div id="${prefix}-preview">${photoMarkup(item)}</div><button id="${prefix}-remove-photo" type="button" class="text-button" ${item.photo ? '' : 'hidden'}>${t('removePhoto')}</button></div>`;
+  return `<div class="metadata-fields">${categoryButtons(`${prefix}-category`, [item.category ?? 'other'])}<p class="photo-label">${t('photo')}</p><div class="photo-actions"><button type="button" id="${prefix}-choose-photo" class="secondary" data-mutate>${photoIcon('gallery')}${t('choosePhoto')}</button><button type="button" id="${prefix}-take-photo" class="secondary" data-mutate>${photoIcon('camera')}${t('takePhoto')}</button></div><input id="${prefix}-photo" type="file" accept="image/*" aria-label="${t('choosePhoto')}" hidden><input id="${prefix}-camera" type="file" accept="image/*" capture="environment" aria-label="${t('takePhoto')}" hidden><div id="${prefix}-preview">${photoMarkup(item)}</div><button id="${prefix}-remove-photo" type="button" class="text-button" ${item.photo ? '' : 'hidden'}>${t('removePhoto')}</button></div>`;
 }
 function bindMetadata(prefix: string, item: Pick<Discovery, 'category' | 'photo'>): void {
   bindCategory(`${prefix}-category`);

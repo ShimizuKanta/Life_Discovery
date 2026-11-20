@@ -73,6 +73,7 @@ test('v2 validates categories and photo data while v1 remains readable', () => {
     assert.throws(() => parseBackup(JSON.stringify({ ...data, discoveries: [{ ...data.discoveries[0], photo }] })));
   }
   assert.throws(() => parseBackup(JSON.stringify({ ...data, discoveries: [{ ...data.discoveries[0], category: 'invalid' }] })));
-  assert.equal(filterDeck(data.discoveries, 'newest', false, '', '', 'insight').length, 1);
-  assert.equal(filterDeck(data.discoveries, 'newest', false, '', '', 'first').length, 0);
+  assert.equal(filterDeck(data.discoveries, 'newest', false, '', '', ['insight', 'other']).length, 1);
+  assert.equal(filterDeck(data.discoveries, 'newest', false, '', '', ['first']).length, 0);
+  assert.equal(filterDeck(data.discoveries, 'newest', false, '', '', []).length, 0);
 });
