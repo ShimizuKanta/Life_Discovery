@@ -348,6 +348,16 @@ test('v2 photos, category filters, random cards, calendar and offline backup rou
   await page.locator('#random-card').click();
   await expect(page.locator('#discovery-card .card-content')).not.toHaveText(original);
   await go(page, 'calendar');
+  await page.getByRole('button', { name: '2026年11月' }).click();
+  await page.locator('#calendar-year').fill('2024');
+  await page.locator('#calendar-month').selectOption('1');
+  await page.locator('#month-picker-form button[type="submit"]').click();
+  await expect(page.getByRole('button', { name: '2024年2月' })).toBeFocused();
+  await expect(page.locator('[data-day="2024-02-29"]')).toBeVisible();
+  await page.getByRole('button', { name: '2024年2月' }).click();
+  await page.locator('#calendar-year').fill('2026');
+  await page.locator('#calendar-month').selectOption('10');
+  await page.locator('#calendar-year').press('Enter');
   await page.locator('[data-day="2026-11-18"]').click();
   await expect(page.locator('.calendar-entry')).toHaveCount(2);
   await expect(page.locator('[data-day="2026-11-18"] .category-mark')).toHaveCount(2);

@@ -590,25 +590,73 @@ function bindMetadata(prefix: string, item: Pick<Discovery, 'category' | 'photo'
   $(`#${prefix}-remove-photo`).onclick = () => { if (busy) return; item.photo = null; update(); };
 }
 function renderCalendar(): string {
-  const year = calendarMonth.getFullYear(), month = calendarMonth.getMonth();
+  const year = calendarMonth.getFullYear();
+  const month = calendarMonth.getMonth();
   const label = new Intl.DateTimeFormat(settings.language, { year: 'numeric', month: 'long' }).format(calendarMonth);
-  const days = new Date(year, month + 1, 0).getDate();
+  const endOfMonth = new Date(calendarMonth);
+  endOfMonth.setMonth(month + 1, 0);
+  const days = endOfMonth.getDate();
   const weekday = new Intl.DateTimeFormat(settings.language, { weekday: 'short' });
   const dayItems = items.filter(item => localInput(new Date(item.discoveredAt)).slice(0, 10) === selectedDay)
     .sort((a, b) => Date.parse(a.discoveredAt) - Date.parse(b.discoveredAt));
-  return `<section>${hero('calendarTitle')}<div class="month-navigation"><button id="previous-month" class="secondary" aria-label="${t('previousMonth')}">‹</button><h2 aria-live="polite">${label}</h2><button id="next-month" class="secondary" aria-label="${t('nextMonth')}">›</button></div><div class="calendar-grid">${Array.from({ length: 7 }, (_, i) => `<span class="weekday">${weekday.format(new Date(2023, 0, 1 + i))}</span>`).join('')}${'<span></span>'.repeat(calendarMonth.getDay())}${Array.from({ length: days }, (_, i) => {
-    const date = localInput(new Date(year, month, i + 1)).slice(0, 10);
+  return `<section>${hero('calendarTitle')}<div class="month-navigation">
+    <button id="previous-month" class="secondary" aria-label="${t('previousMonth')}">‹</button>
+    <h2><button id="open-month-picker" type="button" class="month-picker-trigger" aria-haspopup="dialog">${label}<span aria-hidden="true">⌄</span></button></h2>
+    <button id="next-month" class="secondary" aria-label="${t('nextMonth')}">›</button>
+  </div>
+  ${monthPicker(year, month)}<div class="calendar-grid">${Array.from({ length: 7 }, (_, i) => `<span class="weekday">${weekday.format(new Date(2023, 0, 1 + i))}</span>`).join('')}${'<span></span>'.repeat(calendarMonth.getDay())}${Array.from({ length: days }, (_, i) => {
+    const day = new Date(calendarMonth);
+    day.setDate(i + 1);
+    const date = localInput(day).slice(0, 10);
     const records = items.filter(item => localInput(new Date(item.discoveredAt)).slice(0, 10) === date);
     return `<button class="calendar-day" data-day="${date}" aria-pressed="${date === selectedDay}" aria-label="${date}: ${records.length} ${t('countUnit')}"><span>${i + 1}</span><span class="day-marks">${records.map(item => `<span class="category-mark ${item.decision === 'archived' ? 'archived' : ''}" title="${categoryLabel(item)}" aria-label="${categoryLabel(item)}">${categoryIcons[item.category ?? 'other']}</span>`).join('')}</span></button>`;
-  }).join('')}</div><h2 class="selected-date">${selectedDay}</h2><div class="calendar-list">${dayItems.length ? dayItems.map(item => `<div class="calendar-entry"><article class="discovery-card ${item.decision === 'archived' ? 'archived' : ''}" tabindex="0" role="button" aria-pressed="false" data-calendar-id="${escape(item.id)}" aria-label="${escape(item.content)}. ${t('flip')}"><div class="calendar-front"><div class="card-topline">${categoryLabel(item)} · ${dateLabel(item.discoveredAt)}</div>${photoMarkup(item)}<p class="card-content">${escape(item.content)}</p></div><div class="calendar-back" hidden><p class="status-pill">${t(item.decision === 'pending' ? 'pending' : item.decision === 'kept' ? 'kept' : 'archived')}</p>${item.review ? `<p>${item.review.score}%</p><p class="card-content">${escape(item.review.comment)}</p>` : `<p>${t('notReviewed')}</p>`}</div><div class="card-bottom">${t('flip')}</div></article><button class="text-button" data-calendar-edit="${escape(item.id)}">${t('edit')}</button></div>`).join('') : `<p class="helper">${t('noDay')}</p>`}</div></section>`;
+  }).join('')}</div><h2 class="selected-date">${selectedDay}</h2><div class="calendar-list">${dayItems.length ? dayItems.map(item => `<div class="calendar-entry"><article class="discovery-card ${item.decision === 'archived' ? 'archived' : ''}" tabindex="0" role="button" aria-pressed="false" data-calendar-id="${escape(item.id)}" aria-label="${escape(item.content)}. ${t('flip')}">${cardTopline(item)}<div class="card-body"><div class="calendar-front">${cardFront(item)}</div><div class="calendar-back" hidden>${cardBack(item)}</div></div><div class="card-bottom">${t('flip')}</div></article><button class="text-button" data-calendar-edit="${escape(item.id)}">${t('edit')}</button></div>`).join('') : `<p class="helper">${t('noDay')}</p>`}</div></section>`;
+}
+function monthPicker(year: number, month: number): string {
+  const monthName = new Intl.DateTimeFormat(settings.language, { month: 'long' });
+  const options = Array.from({ length: 12 }, (_, value) => {
+    return `<option value="${value}" ${value === month ? 'selected' : ''}>${monthName.format(new Date(2026, value, 1))}</option>`;
+  }).join('');
+  return `<dialog id="month-picker" class="edit-dialog" aria-labelledby="month-picker-title">
+    <form id="month-picker-form">
+      <h2 id="month-picker-title">${t('chooseMonth')}</h2>
+      <div class="month-picker-fields">
+        <div><label for="calendar-year">${t('calendarYear')}</label><input id="calendar-year" type="number" inputmode="numeric" min="1" max="9999" step="1" value="${year}" required></div>
+        <div><label for="calendar-month">${t('calendarMonth')}</label><select id="calendar-month">${options}</select></div>
+      </div>
+      <div class="decision-actions">
+        <button id="cancel-month-picker" type="button" class="secondary">${t('cancel')}</button>
+        <button type="submit" class="primary">${t('jumpMonth')}</button>
+      </div>
+    </form>
+  </dialog>`;
 }
 function bindCalendar(): void {
-  const changeMonth = (delta: number) => {
-    calendarMonth = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + delta, 1);
-    selectedDay = localInput(calendarMonth).slice(0, 10); render();
+  const changeMonth = (year: number, month: number, focus: string) => {
+    const next = new Date(calendarMonth);
+    next.setFullYear(year, month, 1);
+    if (!Number.isFinite(next.getTime()) || next.getFullYear() < 1 || next.getFullYear() > 9999) return;
+    calendarMonth = next;
+    selectedDay = localInput(calendarMonth).slice(0, 10);
+    render();
+    $(focus).focus({ preventScroll: true });
   };
-  $('#previous-month').onclick = () => changeMonth(-1);
-  $('#next-month').onclick = () => changeMonth(1);
+  $('#previous-month').onclick = () => changeMonth(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, '#previous-month');
+  $('#next-month').onclick = () => changeMonth(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, '#next-month');
+  const dialog = $<HTMLDialogElement>('#month-picker');
+  const year = $<HTMLInputElement>('#calendar-year');
+  const month = $<HTMLSelectElement>('#calendar-month');
+  $('#open-month-picker').onclick = () => {
+    year.value = String(calendarMonth.getFullYear());
+    month.value = String(calendarMonth.getMonth());
+    dialog.showModal();
+  };
+  $('#cancel-month-picker').onclick = () => dialog.close();
+  $('#month-picker-form').onsubmit = event => {
+    event.preventDefault();
+    dialog.close();
+    changeMonth(year.valueAsNumber, Number(month.value), '#open-month-picker');
+  };
   document.querySelectorAll<HTMLElement>('[data-day]').forEach(button => { button.onclick = () => { selectedDay = button.dataset.day!; render(); }; });
   document.querySelectorAll<HTMLElement>('[data-calendar-edit]').forEach(button => { button.onclick = () => { const item = items.find(item => item.id === button.dataset.calendarEdit); if (item) openEditor(item); }; });
   document.querySelectorAll<HTMLElement>('[data-calendar-id]').forEach(element => {
@@ -618,6 +666,7 @@ function bindCalendar(): void {
       await animateCard(element, [{ transform: 'rotateY(0)' }, { transform: 'rotateY(-90deg)' }], 160);
       const front = $<HTMLElement>('.calendar-front', element), back = $<HTMLElement>('.calendar-back', element);
       front.hidden = !front.hidden; back.hidden = !back.hidden;
+      $('.card-body', element).scrollTop = 0;
       element.classList.toggle('flipped', front.hidden); element.setAttribute('aria-pressed', String(front.hidden));
       $('.card-bottom', element).textContent = t(front.hidden ? 'flipBack' : 'flip');
       const item = items.find(item => item.id === element.dataset.calendarId)!;
@@ -628,6 +677,9 @@ function bindCalendar(): void {
     let suppress = false;
     swipe(element, () => {}, () => { suppress = true; const item = items.find(item => item.id === element.dataset.calendarId); if (item) openEditor(item); }, () => { suppress = false; }, () => { suppress = true; });
     element.onclick = () => { if (!suppress) void flip(); };
-    element.onkeydown = event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); void flip(); } };
+    element.onkeydown = event => {
+      scrollCardWithKeys(event, element);
+      if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); void flip(); }
+    };
   });
 }

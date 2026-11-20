@@ -19,7 +19,7 @@ export interface Backup { schemaVersion: 1 | 2; exportedAt: string; discoveries:
 
 export function localInput(date = new Date()): string {
   const pad = (n: number) => String(n).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  return `${String(date.getFullYear()).padStart(4, '0')}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 export function anniversary(value: string): Date {
   const date = new Date(value);

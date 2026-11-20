@@ -1,6 +1,6 @@
 import type { Language } from './core.js';
 const ja = {
-  calendar: 'カレンダー', calendarTitle: '発見のある日々。', calendarYear: '年', jumpYear: '年を移動', previousMonth: '前の月', nextMonth: '次の月', noDay: 'この日の発見はありません。',
+  calendar: 'カレンダー', calendarTitle: '発見のある日々。', calendarYear: '年', calendarMonth: '月', chooseMonth: '年月を選ぶ', jumpMonth: '移動', previousMonth: '前の月', nextMonth: '次の月', noDay: 'この日の発見はありません。',
   category: '種類', first: '初めて', insight: '気づき', emotion: '感動', achievement: '達成', other: 'その他',
   choosePhoto: '写真を選ぶ', takePhoto: 'カメラで撮る', cameraHelp: 'カメラ対応端末では撮影画面を開きます。端末・ブラウザによってはファイル選択が表示されます。',
   photo: '写真（任意・1枚）', removePhoto: '写真を外す', photoHelp: '20MBまで。端末内で長辺1600pxのJPEGに縮小して保存します。', photoError: '写真を読み込めません。20MB以下の対応画像（JPEG・PNGなど）を選んでください。',
@@ -26,7 +26,7 @@ const ja = {
 };
 export type MessageKey = keyof typeof ja;
 const en: Record<MessageKey, string> = {
-  calendar: 'Calendar', calendarTitle: 'Days of discovery.', calendarYear: 'Year', jumpYear: 'Go to year', previousMonth: 'Previous month', nextMonth: 'Next month', noDay: 'No discoveries on this day.',
+  calendar: 'Calendar', calendarTitle: 'Days of discovery.', calendarYear: 'Year', calendarMonth: 'Month', chooseMonth: 'Choose a year and month', jumpMonth: 'Go', previousMonth: 'Previous month', nextMonth: 'Next month', noDay: 'No discoveries on this day.',
   category: 'Category', first: 'First experience', insight: 'Insight', emotion: 'Moved', achievement: 'Achievement', other: 'Other',
   choosePhoto: 'Choose photo', takePhoto: 'Take a photo', cameraHelp: 'Opens the camera on supported devices. Some devices or browsers show a file picker instead.',
   photo: 'Photo (optional, one)', removePhoto: 'Remove photo', photoHelp: 'Up to 20 MB. Resized on-device to a JPEG with a maximum side of 1600 px.', photoError: 'Could not read this photo. Choose a supported image (such as JPEG or PNG) under 20 MB.',

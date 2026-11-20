@@ -1281,6 +1281,25 @@ body {
 .edit-review legend { padding: 0 4px; font-size: .875rem; font-weight: 600; }
 .calendar-front { display: grid; min-block-size: 100%; }
 
+.month-picker-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 4px 10px;
+  border-radius: 10px;
+  background: transparent;
+  font-weight: 600;
+}
+.month-picker-trigger:hover { background: #e2ebd7; }
+.month-picker-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.month-picker-fields select { width: 100%; font-size: 1rem; }
+#month-picker .decision-actions button { margin-top: 0; }
 .saved-review .score-heading { font-size: .875rem; }
 .saved-review .score-heading strong { font-size: 1.5rem; }
 .saved-review .saved-score { opacity: 1; cursor: inherit; pointer-events: none; }
