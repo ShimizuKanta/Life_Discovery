@@ -242,16 +242,12 @@ main {
   min-height:190px;
   resize:vertical;
 }
-.writing-card textarea:focus-visible {
-  outline-offset:6px;
+.writing-card textarea:focus {
+  outline:2px solid var(--green);
+  outline-offset:-2px;
 }
 .writing-card textarea::placeholder {
   color:#a1aa99;
-}
-.writing-note {
-  font-size:11px;
-  color:#88927d;
-  margin:3px 0 20px;
 }
 .date-row {
   display:flex;
@@ -462,9 +458,6 @@ main {
   transition:background .2s;
   animation:card-in .22s ease-out;
 }
-.review-page:has(#keep) .discovery-card {
-  touch-action:none;
-}
 .discovery-card.flipped {
   background:#eff3e7;
   animation:flip-in .25s ease-out;
@@ -566,16 +559,6 @@ main {
   font-size:12px;
   margin:8px 0 16px;
 }
-.review-score {
-  font-family:Georgia,serif;
-  font-size:44px;
-  font-weight:400;
-  display:block;
-}
-.review-score small {
-  font-size:17px;
-  margin-left:3px;
-}
 .card-back .card-content {
   font-size:15px;
   margin:10px 0;
@@ -636,7 +619,7 @@ input[type=range]::-moz-range-track {
 .range-labels span:last-child {
   text-align:right;
 }
-#review-comment {
+.review-comment {
   margin:8px 0 15px;
   line-height:1.8;
 }
@@ -1023,11 +1006,7 @@ details[open] summary:before {
     min-height:165px;
     font-size:16px;
   }
-  .writing-note {
-    font-size:10px;
-    margin-bottom:16px;
-  }
-  .date-row {
+    .date-row {
     gap:7px;
   }
   .date-row input {
@@ -1116,7 +1095,7 @@ body {
 :root {
   --muted: #65715e;
 }
-.writing-note, .local-note, .helper, .gesture-hint, .card-meta,
+.local-note, .helper, .gesture-hint, .card-meta,
 .card-bottom, .range-labels, .settings-block small {
   color: #68745f;
 }
@@ -1178,12 +1157,10 @@ body {
 .discovery-card .range-labels { font-size: .75rem; color: #435a37; }
 .discovery-card #review-comment { background: #f6faee; }
 .discovery-card #review-form .secondary { background: #e7f0dc; border-color: #789263; }
-.discovery-card:has(#review-form) .card-content { margin-bottom: 22px; }
+
 
 .category-field { display: grid; gap: 6px; margin: 12px 0; font-size: .875rem; }
-.category-field select { width: 100%; font-size: 1rem; }
 .metadata-fields { border-top: 1px solid var(--line); padding: 10px 0; }
-.metadata-fields input[type=file] { display: block; width: 100%; font-size: .875rem; margin-top: 8px; }
 .discovery-photo { display: block; width: 100%; max-height: 280px; object-fit: contain; border-radius: 12px; margin: 16px 0; background: #ffffff66; }
 .category-tag { font-size: .875rem; }
 .card-topline { flex-wrap: wrap; }
@@ -1198,8 +1175,6 @@ body {
 .category-mark.archived { color: #777; background: #d4d8d0; }
 .selected-date { margin: 30px 0 18px; }
 .calendar-entry { margin-bottom: 24px; perspective: 1000px; }
-.calendar-entry .discovery-card { min-height: 180px; }
-.calendar-entry .card-content { margin: 18px 0; }
 .calendar-entry .text-button { display: block; margin-left: auto; }
 
 .category-field { border: 0; padding: 0; min-width: 0; }
@@ -1208,6 +1183,105 @@ body {
 .category-buttons button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-height: 72px; min-width: 0; padding: 8px 2px; border: 1px solid #b5c7a2; border-radius: 10px; background: #eef3e5; font-size: .875rem; line-height: 1.35; overflow-wrap: anywhere; }
 .category-buttons button > span:first-child { font-size: 1.25rem; }
 .category-field button[aria-pressed=true] { background: #526d4c; color: white; border-color: #526d4c; box-shadow: inset 0 0 0 2px #ffffff50; }
-.all-categories { margin-top: 8px; padding: 8px 14px; border-radius: 10px; background: #eef3e5; border: 1px solid #b5c7a2; font-size: .875rem; }
 .photo-label { font-size: .875rem; font-weight: 600; margin: 12px 0 8px; }
 .photo-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+/* The card frame stays fixed while text, photos and review controls scroll inside it. */
+.discovery-card {
+  block-size: clamp(26rem, 128vw, 41rem);
+  min-height: 0;
+  gap: 12px;
+  padding: clamp(14px, 4vw, 26px);
+}
+.discovery-card.flipped {
+  background: linear-gradient(145deg, #315945, #214537);
+  color: #f4f8eb;
+  border-color: #2b4e3e;
+  box-shadow: inset 0 0 0 4px #ffffff22, 0 5px 0 #214434, 0 16px 28px #354b3433;
+}
+.discovery-card.flipped.archived {
+  background: linear-gradient(145deg, #565e55, #3c453e);
+  border-color: #495148;
+  box-shadow: inset 0 0 0 4px #ffffff22, 0 5px 0 #353e37, 0 16px 28px #354b3433;
+}
+.discovery-card.flipped :is(.card-topline, .small-label, .muted, .card-bottom, .range-labels, .gesture-hint) {
+  color: #e2eddf;
+}
+.discovery-card.flipped .status-pill { color: #243e30; }
+.discovery-card.flipped :is(.card-bottom, #review-form) { border-color: #d5e5d16b; }
+.discovery-card.flipped #review-comment { color: #354536; }
+.discovery-card.flipped #review-form .primary { background: #e2edd6; color: #263e2d; }
+.card-topline { justify-content: space-between; gap: 5px 12px; }
+.card-body {
+  flex: 1 1 auto;
+  min-block-size: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  touch-action: pan-y pinch-zoom;
+}
+.weekly-card:not(.has-overflow), .weekly-card:not(.has-overflow) .card-body,
+.weekly-card .card-topline, .weekly-card .card-bottom { touch-action: none; }
+.card-front { display: grid; align-content: center; min-block-size: 100%; gap: 12px; }
+.card-front.with-photo { align-content: start; }
+.card-body .card-content { font-size: 1rem; line-height: 1.55; margin: 0; }
+.card-body [data-text-size=medium] { font-size: clamp(1.125rem, 4.4vw, 1.5rem); }
+.card-body [data-text-size=large] { font-size: clamp(1.4rem, 6.8vw, 2.4rem); }
+.card-body .discovery-photo {
+  block-size: clamp(9rem, 53vw, 17rem);
+  margin: 0;
+}
+.card-body .status-pill { justify-self: start; margin-bottom: 0; }
+.card-back { padding: 4px 0 12px; }
+.card-back .small-label { margin-top: 12px; }
+.card-back .card-content:empty { display: none; }
+.card-back .card-content + small { display: block; margin-top: 10px; }
+.card-bottom { padding-top: 8px; flex-shrink: 0; }
+.calendar-entry .card-bottom { min-block-size: 39px; }
+.yearly-card .card-front { min-block-size: 0; padding: 8px 0 12px; }
+.yearly-card .card-body .discovery-photo { block-size: clamp(7rem, 36vw, 12rem); }
+.yearly-card #review-form { padding: 6px 0 2px; margin: 0; }
+.yearly-card .score-heading { margin-top: 0; }
+.yearly-card .range-labels { margin-bottom: 12px; }
+.yearly-card #review-comment { min-height: 64px; margin-bottom: 8px; }
+.yearly-card .gesture-hint { margin-bottom: 8px; }
+
+.writing-card {
+  position: relative;
+  z-index: 1;
+  padding: 16px clamp(12px, 3.5vw, 20px);
+  background: linear-gradient(148deg, #e9f1d8, #d5e5bf);
+  border-color: #90aa79;
+  box-shadow: inset 0 0 0 4px #ffffff55, 0 5px 0 #93aa7e, 0 12px 26px #354b3422;
+}
+.writing-card > label, .writing-card .date-row label,
+.category-field legend, .photo-label { font-size: .875rem; font-weight: 600; color: inherit; }
+.writing-card textarea {
+  min-height: 132px;
+  padding: 8px;
+  margin-bottom: 6px;
+  font-size: 1.125rem;
+  line-height: 1.75;
+}
+.writing-card textarea::placeholder { color: #627257; }
+.writing-card :is(.metadata-fields, .date-row) { border-color: #91a77b; }
+.writing-card .metadata-fields { padding-top: 4px; }
+.writing-card .category-buttons button {
+  min-height: 49px;
+  gap: 1px;
+  padding: 4px 1px;
+  font-size: .75rem;
+}
+.writing-card .category-buttons button > span:first-child { font-size: 1rem; }
+.photo-actions button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 0; }
+.writing-card .photo-actions button { padding: 8px 5px; }
+.photo-icon { width: 1.125rem; height: 1.125rem; flex: none; }
+.photo-help { margin: 20px 0 0; text-align: left; }
+.edit-dialog .photo-actions .secondary { margin-top: 0; }
+.edit-dialog .edit-review { margin: 18px 0 0; padding: 8px 12px 12px; border: 1px solid var(--line); border-radius: 12px; min-inline-size: 0; }
+.edit-review legend { padding: 0 4px; font-size: .875rem; font-weight: 600; }
+.calendar-front { display: grid; min-block-size: 100%; }
+
+.saved-review .score-heading { font-size: .875rem; }
+.saved-review .score-heading strong { font-size: 1.5rem; }
+.saved-review .saved-score { opacity: 1; cursor: inherit; pointer-events: none; }
+.all-categories { margin-top: 8px; padding: 8px 14px; border-radius: 10px; background: #eef3e5; border: 1px solid #b5c7a2; font-size: .875rem; }

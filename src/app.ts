@@ -15,6 +15,7 @@ let index = 0;
 let flipped = false;
 let busy = false;
 let moving = false;
+let cardListeners = new AbortController();
 const emptyDraft = () => ({ content: '', date: localInput(), category: 'other' as Category, photo: null as string | null });
 let draft = emptyDraft();
 let calendarMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
@@ -94,6 +95,8 @@ function hero(title: MessageKey, intro?: MessageKey): string {
   return `<div class="page-heading"><span class="eyebrow">${page === 'new' ? t('eyebrow') : `LIFE DISCOVERY / ${page.toUpperCase()}`}</span><h1 tabindex="-1">${escape(t(title))}</h1>${intro ? `<p>${escape(t(intro))}</p>` : ''}</div>`;
 }
 function render(focus = false): void {
+  cardListeners.abort();
+  cardListeners = new AbortController();
   t = translator(settings.language);
   document.documentElement.lang = settings.language;
   document.title = `${t(page)} · Life Discovery`;
@@ -108,16 +111,78 @@ function render(focus = false): void {
   if (focus) $('h1').focus();
 }
 function renderNew(): string {
-  return `<section class="new-page"><div class="intro-plant">${plant}</div>${hero('title', 'intro')}<form id="new-form"><div class="writing-card"><label for="content">${t('content')}</label><textarea id="content" name="content" required placeholder="${t('placeholder')}" rows="5">${escape(draft.content)}</textarea><p class="writing-note">${t('note')}</p>${metadataFields('new', draft)}<p class="helper">${t('voiceHint')}</p><div class="date-row"><label for="discovered-at">${t('date')}</label><input id="discovered-at" name="discoveredAt" type="datetime-local" required value="${escape(draft.date)}"></div></div><button class="primary record-button" type="submit">${t('record')}</button><p class="local-note"><span aria-hidden="true">⌂</span> ${t('local')}</p></form></section>`;
+  return `<section class="new-page"><div class="intro-plant">${plant}</div>${hero('title', 'intro')}
+    <form id="new-form">
+      <div class="card-stack writing-stack"><div class="writing-card">
+        <label for="content">${t('content')}</label>
+        <textarea id="content" name="content" required placeholder="${t('placeholder')}" rows="4">${escape(draft.content)}</textarea>
+        ${metadataFields('new', draft)}
+        <div class="date-row"><label for="discovered-at">${t('date')}</label><input id="discovered-at" name="discoveredAt" type="datetime-local" required value="${escape(draft.date)}"></div>
+      </div></div>
+      ${photoHelp()}
+      <button class="primary record-button" type="submit">${t('record')}</button>
+      <p class="local-note"><span aria-hidden="true">⌂</span> ${t('local')}</p>
+    </form></section>`;
+}
+function reviewFields(prefix: string, value: { score: number; comment: string }): string {
+  return `<div class="score-heading"><label for="${prefix}score">${t('score')}</label><output id="${prefix}score-value" for="${prefix}score">${value.score}%</output></div>
+    <input type="range" id="${prefix}score" min="0" max="100" step="1" value="${value.score}" aria-valuetext="${value.score}%">
+    <div class="range-labels"><span>${t('lowFull')}</span><span>${t('middle')}</span><span>${t('high')}</span></div>
+    <label for="${prefix}review-comment">${t('comment')}</label>
+    <textarea id="${prefix}review-comment" class="review-comment" rows="2" placeholder="${t('commentPlaceholder')}">${escape(value.comment)}</textarea>`;
+}
+function scoreColor(score: number): string {
+  return `hsl(${85 - score * 0.85} 48% 48%)`;
+}
+function bindReviewFields(prefix: string, value: { score: number; comment: string }): void {
+  const range = $<HTMLInputElement>(`#${prefix}score`);
+  const updateScore = () => {
+    value.score = Number(range.value);
+    const percentage = `${range.value}%`;
+    $(`#${prefix}score-value`).textContent = percentage;
+    range.setAttribute('aria-valuetext', percentage);
+    range.style.setProperty('--score-color', scoreColor(value.score));
+  };
+  updateScore();
+  range.oninput = updateScore;
+  $<HTMLTextAreaElement>(`#${prefix}review-comment`).oninput = event => { value.comment = (event.target as HTMLTextAreaElement).value; };
 }
 function annualForm(): string {
-  return `<form id="review-form"><div class="score-heading"><label for="score">${t('score')}</label><output id="score-value" for="score">${reviewDraft.score}%</output></div><input type="range" id="score" min="0" max="100" step="1" value="${reviewDraft.score}" aria-valuetext="${reviewDraft.score}%"><div class="range-labels"><span>${t('lowFull')}</span><span>${t('middle')}</span><span>${t('high')}</span></div><label for="review-comment">${t('comment')}</label><textarea id="review-comment" rows="2" placeholder="${t('commentPlaceholder')}">${escape(reviewDraft.comment)}</textarea><p class="gesture-hint">${t('yearlyHint')}</p><div class="decision-actions"><button id="skip" type="button" class="secondary">${t('skip')}</button><button class="primary" type="submit">${t('reviewSave')}</button></div></form>`;
+  return `<form id="review-form">${reviewFields('', reviewDraft)}
+    <p class="gesture-hint">${t('yearlyHint')}</p><div class="decision-actions">
+      <button id="skip" type="button" class="secondary">${t('skip')}</button><button class="primary" type="submit">${t('reviewSave')}</button>
+    </div></form>`;
+}
+function cardText(content: string): string {
+  const length = [...content].length + (content.match(/\n/g)?.length ?? 0) * 14;
+  const size = length <= 28 ? 'large' : length <= 85 ? 'medium' : 'small';
+  return `<p class="card-content" data-text-size="${size}">${escape(content)}</p>`;
+}
+function cardFront(item: Discovery): string {
+  return `<div class="card-front ${item.photo ? 'with-photo' : ''}">${photoMarkup(item)}${cardText(item.content)}
+    ${item.decision === 'archived' ? `<span class="status-pill">${t('archived')}</span>` : ''}</div>`;
+}
+function cardBack(item: Discovery): string {
+  const status = item.decision === 'pending' ? 'pending' : item.decision === 'kept' ? 'kept' : 'archived';
+  return `<div class="card-back"><span class="small-label">${t('status')}</span><p class="status-pill">${t(status)}</p>
+    ${item.review ? `<div class="saved-review">
+      <div class="score-heading"><span>${t('reviewLabel')}</span><strong>${item.review.score}%</strong></div>
+      <input class="saved-score" type="range" min="0" max="100" value="${item.review.score}" style="--score-color: ${scoreColor(item.review.score)}" aria-label="${t('reviewLabel')}" aria-valuetext="${item.review.score}%" disabled>
+      ${cardText(item.review.comment)}<small>${escape(dateLabel(item.review.reviewedAt))}</small>
+    </div>` : `<p class="muted">${t('notReviewed')}</p>`}</div>`;
+}
+function cardTopline(item: Discovery): string {
+  return `<div class="card-topline"><span class="category-tag">${categoryLabel(item)}</span><time datetime="${item.discoveredAt}">${escape(dateLabel(item.discoveredAt))}</time></div>`;
 }
 function card(item: Discovery): string {
-  const status: MessageKey = item.decision === 'pending' ? 'pending' : item.decision === 'kept' ? 'kept' : 'archived';
+  const status = item.decision === 'pending' ? 'pending' : item.decision === 'kept' ? 'kept' : 'archived';
   const spokenContent = flipped ? `${t(status)}. ${item.review ? `${item.review.score}%. ${item.review.comment}` : t('notReviewed')}` : item.content;
   const cardLabel = escape(`${dateLabel(item.discoveredAt)}. ${spokenContent}. ${t(flipped ? 'flipBack' : 'flip')}`);
-  return `<div class="card-stack"><article class="discovery-card ${item.decision === 'archived' ? 'archived' : ''} ${flipped ? 'flipped' : ''}" id="discovery-card" tabindex="0" role="${page === 'yearly' ? 'group' : 'button'}" aria-label="${cardLabel}" ${page === 'yearly' ? '' : `aria-pressed="${flipped}"`}><div class="card-topline"><span class="category-tag">${categoryLabel(item)}</span><time datetime="${item.discoveredAt}">${escape(dateLabel(item.discoveredAt))}</time></div>${flipped ? `<div class="card-back"><span class="small-label">${t('status')}</span><p class="status-pill">${t(status)}</p>${item.review ? `<span class="small-label">${t('reviewLabel')}</span><strong class="review-score">${item.review.score}<small>%</small></strong><p class="card-content">${escape(item.review.comment)}</p><small>${escape(dateLabel(item.review.reviewedAt))}</small>` : `<p class="muted">${t('notReviewed')}</p>`}</div>` : ` ${photoMarkup(item)}<p class="card-content">${escape(item.content)}</p>${item.decision === 'archived' ? `<span class="status-pill">${t('archived')}</span>` : ''}`}${page === 'yearly' ? annualForm() : ''}<div class="card-bottom"><span>${t(flipped ? 'flipBack' : 'flip')}</span><span aria-hidden="true">↻</span></div></article></div><div class="card-meta"><span>${t('editHint')}</span><button class="text-button" id="edit-card">${t('edit')} <span aria-hidden="true">↗</span></button></div>`;
+  return `<div class="card-stack"><article class="discovery-card ${page}-card ${item.decision === 'archived' ? 'archived' : ''} ${flipped ? 'flipped' : ''}" id="discovery-card" tabindex="0" role="${page === 'yearly' ? 'group' : 'button'}" aria-label="${cardLabel}" ${page === 'yearly' ? '' : `aria-pressed="${flipped}"`}>
+    ${cardTopline(item)}
+    <div class="card-body">${flipped ? cardBack(item) : cardFront(item)}${page === 'yearly' ? annualForm() : ''}</div>
+    <div class="card-bottom"><span>${t(flipped ? 'flipBack' : 'flip')}</span><span aria-hidden="true">↻</span></div>
+  </article></div><div class="card-meta"><span>${t('editHint')}</span><button class="text-button" id="edit-card">${t('edit')} <span aria-hidden="true">↗</span></button></div>`;
 }
 function renderCards(): string {
   const cards = queue();
@@ -202,6 +267,10 @@ function bindCards(): void {
   const item = current(); if (!item) return;
   let suppressClick = false;
   const element = $('#discovery-card');
+  const body = $('.card-body', element);
+  const updateOverflow = () => { element.classList.toggle('has-overflow', body.scrollHeight > body.clientHeight + 1); };
+  updateOverflow();
+  window.addEventListener('resize', updateOverflow, { signal: cardListeners.signal });
   const flip = async () => {
     if (suppressClick || busy || moving) return;
     moving = true; app.inert = true;
@@ -218,6 +287,7 @@ function bindCards(): void {
   };
   element.onkeydown = event => {
     if (event.target !== element) return;
+    scrollCardWithKeys(event, element);
     if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); suppressClick = false; void flip(); }
     if (page === 'deck' && ['ArrowLeft', 'ArrowRight'].includes(event.key)) { event.preventDefault(); advance(event.key === 'ArrowLeft' ? -1 : 1, false); }
   };
@@ -233,11 +303,7 @@ function bindCards(): void {
   } else if (page === 'yearly') {
     $('#skip').onclick = () => advance(1);
     $('#review-form').onsubmit = event => { event.preventDefault(); saveReview(); };
-    const range = $<HTMLInputElement>('#score');
-    const color = () => { range.style.setProperty('--score-color', `hsl(${85 - reviewDraft.score * 0.85} 48% 48%)`); };
-    color();
-    range.oninput = () => { reviewDraft.score = Number(range.value); $('#score-value').textContent = `${range.value}%`; range.setAttribute('aria-valuetext', `${range.value}%`); color(); };
-    $('#review-comment').oninput = event => { reviewDraft.comment = (event.target as HTMLTextAreaElement).value; };
+    bindReviewFields('', reviewDraft);
   } else {
     $('#random-card').onclick = () => { const length = queue().length; advance(length > 1 ? 1 + Math.floor(Math.random() * (length - 1)) : 0); };
     $('#previous').onclick = () => advance(-1, false); $('#next').onclick = () => advance(1, false);
@@ -297,13 +363,22 @@ function swipe(element: HTMLElement, action: (direction: 'left' | 'right' | 'up'
   ['pointercancel', 'lostpointercapture'].forEach(type => element.addEventListener(type, () => { if (active) settle(); }));
   element.addEventListener('contextmenu', event => { if (hold) event.preventDefault(); });
 }
+function scrollCardWithKeys(event: KeyboardEvent, card: HTMLElement): void {
+  if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+  const body = $('.card-body', card);
+  if (body.scrollHeight <= body.clientHeight) return;
+  event.preventDefault();
+  body.scrollBy(0, event.key === 'ArrowDown' ? 64 : -64);
+}
 function openEditor(item: Discovery): void {
   if (busy || moving) return;
   const metadata = { category: item.category ?? 'other', photo: item.photo ?? null };
+  const review = item.review && { ...item.review };
   const dialog = $<HTMLDialogElement>('#editor');
-  dialog.innerHTML = `<form id="edit-form"><div class="dialog-heading"><h2 id="edit-title">${t('editTitle')}</h2><button type="button" id="edit-close" class="icon-button" aria-label="${t('close')}">×</button></div><label for="edit-content">${t('content')}</label><textarea id="edit-content" rows="5" required>${escape(item.content)}</textarea>${metadataFields('edit', metadata)}<label for="edit-date">${t('date')}</label><input id="edit-date" type="datetime-local" required value="${localInput(new Date(item.discoveredAt))}"><p class="helper">${t(item.decision === 'archived' ? 'archived' : item.decision === 'kept' ? 'kept' : 'pending')}</p><button class="primary" type="submit">${t('save')}</button>${item.decision === 'archived' ? `<button id="restore" type="button" class="secondary" data-mutate>${t('restore')}</button>` : ''}<div class="dialog-footer"><button id="delete" type="button" class="danger text-button" data-mutate>${t('delete')}</button><button id="edit-cancel" type="button" class="text-button">${t('cancel')}</button></div></form>`;
+  dialog.innerHTML = `<form id="edit-form"><div class="dialog-heading"><h2 id="edit-title">${t('editTitle')}</h2><button type="button" id="edit-close" class="icon-button" aria-label="${t('close')}">×</button></div><label for="edit-content">${t('content')}</label><textarea id="edit-content" rows="5" required>${escape(item.content)}</textarea>${metadataFields('edit', metadata)}${photoHelp()}<label for="edit-date">${t('date')}</label><input id="edit-date" type="datetime-local" required value="${localInput(new Date(item.discoveredAt))}">${review ? `<fieldset class="edit-review"><legend>${t('editReview')}</legend>${reviewFields('edit-', review)}</fieldset>` : ''}<p class="helper">${t(item.decision === 'archived' ? 'archived' : item.decision === 'kept' ? 'kept' : 'pending')}</p><button class="primary" type="submit">${t('save')}</button>${item.decision === 'archived' ? `<button id="restore" type="button" class="secondary" data-mutate>${t('restore')}</button>` : ''}<div class="dialog-footer"><button id="delete" type="button" class="danger text-button" data-mutate>${t('delete')}</button><button id="edit-cancel" type="button" class="text-button">${t('cancel')}</button></div></form>`;
   dialog.showModal();
   bindMetadata('edit', metadata);
+  if (review) bindReviewFields('edit-', review);
   const close = () => { if (!busy) dialog.close(); };
   $('#edit-close').onclick = close; $('#edit-cancel').onclick = close;
   dialog.oncancel = event => { if (busy) event.preventDefault(); };
@@ -313,7 +388,7 @@ function openEditor(item: Discovery): void {
     const date = $<HTMLInputElement>('#edit-date').value;
     if (!content || !date || !Number.isFinite(new Date(date).getTime())) { showError('required'); return; }
     void perform(async () => {
-      const changed = { ...item, ...metadata, content, discoveredAt: date === localInput(new Date(item.discoveredAt)) ? item.discoveredAt : new Date(date).toISOString(), updatedAt: new Date().toISOString() };
+      const changed = { ...item, ...metadata, content, review: review && { ...review, comment: review.comment.trim() }, discoveredAt: date === localInput(new Date(item.discoveredAt)) ? item.discoveredAt : new Date(date).toISOString(), updatedAt: new Date().toISOString() };
       await storage.saveDiscovery(changed); updateItem(changed); dialog.close(); render(); notify('updated');
     });
   };
@@ -468,8 +543,17 @@ function bindCategory(id: string): void {
 function photoMarkup(item: Pick<Discovery, 'photo'>): string {
   return item.photo ? `<img class="discovery-photo" src="${escape(item.photo)}" alt="${t('photo')}" draggable="false">` : '';
 }
+function photoIcon(kind: 'gallery' | 'camera'): string {
+  const path = kind === 'gallery'
+    ? '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="9" r="1.5"/><path d="m3 17 5-4 3 2 5-5 5 5"/>'
+    : '<path d="M3 7h4l2-3h6l2 3h4v13H3z"/><circle cx="12" cy="13" r="3.5"/>';
+  return `<svg class="photo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${path}</svg>`;
+}
+function photoHelp(): string {
+  return `<p class="helper photo-help">${t('photoHelp')} ${t('cameraHelp')}</p>`;
+}
 function metadataFields(prefix: string, item: Pick<Discovery, 'category' | 'photo'>): string {
-  return `<div class="metadata-fields">${categoryButtons(`${prefix}-category`, item.category ?? 'other')}<p class="photo-label">${t('photo')}</p><div class="photo-actions"><button type="button" id="${prefix}-choose-photo" class="secondary" data-mutate>${t('choosePhoto')}</button><button type="button" id="${prefix}-take-photo" class="secondary" data-mutate>${t('takePhoto')}</button></div><input id="${prefix}-photo" type="file" accept="image/*" aria-label="${t('choosePhoto')}" hidden><input id="${prefix}-camera" type="file" accept="image/*" capture="environment" aria-label="${t('takePhoto')}" hidden><p class="helper">${t('cameraHelp')}</p><p class="helper">${t('photoHelp')}</p><div id="${prefix}-preview">${photoMarkup(item)}</div><button id="${prefix}-remove-photo" type="button" class="text-button" ${item.photo ? '' : 'hidden'}>${t('removePhoto')}</button></div>`;
+  return `<div class="metadata-fields">${categoryButtons(`${prefix}-category`, item.category ?? 'other')}<p class="photo-label">${t('photo')}</p><div class="photo-actions"><button type="button" id="${prefix}-choose-photo" class="secondary" data-mutate>${photoIcon('gallery')}${t('choosePhoto')}</button><button type="button" id="${prefix}-take-photo" class="secondary" data-mutate>${photoIcon('camera')}${t('takePhoto')}</button></div><input id="${prefix}-photo" type="file" accept="image/*" aria-label="${t('choosePhoto')}" hidden><input id="${prefix}-camera" type="file" accept="image/*" capture="environment" aria-label="${t('takePhoto')}" hidden><div id="${prefix}-preview">${photoMarkup(item)}</div><button id="${prefix}-remove-photo" type="button" class="text-button" ${item.photo ? '' : 'hidden'}>${t('removePhoto')}</button></div>`;
 }
 function bindMetadata(prefix: string, item: Pick<Discovery, 'category' | 'photo'>): void {
   bindCategory(`${prefix}-category`);
@@ -480,13 +564,13 @@ function bindMetadata(prefix: string, item: Pick<Discovery, 'category' | 'photo'
   for (const kind of ['photo', 'camera']) {
     const input = $<HTMLInputElement>(`#${prefix}-${kind}`);
     input.onchange = () => {
-    const file = input.files?.[0]; if (!file) return;
-    void perform(async () => {
-      try { item.photo = await preparePhoto(file); update(); }
-      catch { showError('photoError'); }
-      finally { input.value = ''; }
-    });
-  };
+      const file = input.files?.[0]; if (!file) return;
+      void perform(async () => {
+        try { item.photo = await preparePhoto(file); update(); }
+        catch { showError('photoError'); }
+        finally { input.value = ''; }
+      });
+    };
   }
   $(`#${prefix}-remove-photo`).onclick = () => { if (busy) return; item.photo = null; update(); };
 }
