@@ -40,7 +40,7 @@ function queue(): Discovery[] {
     .sort((a, b) => Date.parse(a.discoveredAt) - Date.parse(b.discoveredAt));
 }
 function current(): Discovery | undefined { const cards = queue(); return cards[index % (cards.length || 1)]; }
-function notify(key: MessageKey): void {
+function notify(key: MessageKey, origin?: DOMRect): void {
   const toast = $('#toast');
   toast.textContent = `✓ ${t(key)}`;
   toast.classList.remove('show');
@@ -48,6 +48,29 @@ function notify(key: MessageKey): void {
   toast.classList.add('show');
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => toast.classList.remove('show'), 2800);
+  if (origin) celebrate(key, origin);
+}
+function celebrate(key: MessageKey, origin: DOMRect): void {
+  document.querySelector('.celebration')?.remove();
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const burst = document.createElement('div');
+  burst.className = 'celebration';
+  burst.dataset.action = key;
+  burst.setAttribute('aria-hidden', 'true');
+  const centerX = origin.left + origin.width / 2;
+  burst.style.left = `${centerX > 0 && centerX < innerWidth ? centerX : innerWidth / 2}px`;
+  burst.style.top = `${Math.min(innerHeight - 24, Math.max(80, origin.top))}px`;
+  for (let i = 0; i < 16; i++) {
+    const piece = document.createElement('span');
+    const angle = Math.PI * (0.12 + 0.76 * i / 15);
+    const distance = 48 + Math.random() * 46;
+    piece.style.setProperty('--dx', `${Math.cos(angle) * distance}px`);
+    piece.style.setProperty('--dy', `${-Math.sin(angle) * distance}px`);
+    piece.style.setProperty('--spin', `${Math.random() * 240 - 120}deg`);
+    burst.append(piece);
+  }
+  document.body.append(burst);
+  window.setTimeout(() => burst.remove(), 1000);
 }
 function showError(key: MessageKey): void {
   const dialog = document.querySelector<HTMLDialogElement>('dialog[open]');
@@ -225,10 +248,11 @@ function bindNew(): void {
     event.preventDefault();
     if (!draft.content.trim() || !draft.date || !Number.isFinite(new Date(draft.date).getTime())) { showError('required'); return; }
     void perform(async () => {
+      const origin = $('.record-button').getBoundingClientRect();
       const item = { ...createDiscovery(draft.content, draft.date), category: draft.category, photo: draft.photo };
       await storage.saveDiscovery(item);
       items.push(item); draft = emptyDraft();
-      render(); notify('saved');
+      render(); notify('saved', origin);
     });
   };
 }
@@ -242,17 +266,19 @@ function advance(delta: number, wrap = true): void {
 function judge(decision: 'kept' | 'archived'): void {
   const item = current(); if (!item) return;
   void perform(async () => {
+    const origin = $(decision === 'kept' ? '#keep' : '#archive').getBoundingClientRect();
     const changed = decide(item, decision); await storage.saveDiscovery(changed); updateItem(changed);
-    flipped = false; render(); notify('judged');
+    flipped = false; render(); notify('judged', origin);
   });
 }
 function saveReview(): void {
   const item = current(); if (!item) return;
   void perform(async () => {
+    const origin = $('#review-form button[type="submit"]').getBoundingClientRect();
     const now = new Date().toISOString();
     const changed = { ...item, updatedAt: now, review: { score: reviewDraft.score, comment: reviewDraft.comment.trim(), reviewedAt: now } };
     await storage.saveDiscovery(changed); updateItem(changed);
-    flipped = false; reviewDraft = { score: 50, comment: '' }; render(); notify('reviewed');
+    flipped = false; reviewDraft = { score: 50, comment: '' }; render(); notify('reviewed', origin);
   });
 }
 function bindCards(): void {
@@ -399,8 +425,9 @@ function openEditor(item: Discovery): void {
     const date = $<HTMLInputElement>('#edit-date').value;
     if (!content || !date || !Number.isFinite(new Date(date).getTime())) { showError('required'); return; }
     void perform(async () => {
+      const origin = $('#edit-form button[type="submit"]').getBoundingClientRect();
       const changed = { ...item, ...metadata, content, review: review && { ...review, comment: review.comment.trim() }, discoveredAt: date === localInput(new Date(item.discoveredAt)) ? item.discoveredAt : new Date(date).toISOString(), updatedAt: new Date().toISOString() };
-      await storage.saveDiscovery(changed); updateItem(changed); dialog.close(); render(); notify('updated');
+      await storage.saveDiscovery(changed); updateItem(changed); dialog.close(); render(); notify('updated', origin);
     });
   };
   $('#delete').onclick = () => {

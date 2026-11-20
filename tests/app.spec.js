@@ -63,16 +63,19 @@ test('record subtitle and save button fit the initial mobile viewport', async ({
 
 test('record, persist, judge, review, flip, edit, archive restore and delete', async ({ page }) => {
   await add(page, '初めてパンを焼いた');
+  await expect(page.locator('.celebration[data-action=saved] span').first()).toBeVisible();
   await page.reload();
   await go(page, 'weekly');
   await expect(page.locator('#discovery-card')).toContainText('初めてパンを焼いた');
   await page.locator('#keep').click();
+  await expect(page.locator('.celebration[data-action=judged]')).toBeAttached();
   await expect(page.getByRole('heading', { name: '判定待ちの発見はありません' })).toBeVisible();
   await go(page, 'yearly');
   await page.locator('#score').fill('85');
   await page.locator('#score').dispatchEvent('input');
   await page.locator('#review-comment').fill('今では週末の楽しみ');
   await page.locator('#review-form button[type="submit"]').click();
+  await expect(page.locator('.celebration[data-action=reviewed]')).toBeAttached();
   await expect(page.getByRole('heading', { name: '評価待ちの発見はありません' })).toBeVisible();
   await go(page, 'deck');
   await page.locator('#discovery-card').click();
@@ -256,14 +259,18 @@ test('storage failures keep drafts and roll back a whole backup replacement', as
   await page.locator('#error button').click();
   expect((await exportData(page)).discoveries).toEqual(original.discoveries);
   await go(page, 'new');
+  await expect(page.locator('.celebration')).toHaveCount(0);
   await page.locator('#content').fill('保存に失敗しても入力を維持');
   await abortNextWrite();
   await page.locator('#new-form button[type="submit"]').click();
   await expect(page.locator('#error')).toContainText('保存できませんでした');
+  await expect(page.locator('.celebration')).toHaveCount(0);
   await expect(page.locator('#content')).toHaveValue('保存に失敗しても入力を維持');
   await page.locator('#error button').click();
+  await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.locator('#new-form button[type="submit"]').click();
   await expect(page.locator('#content')).toHaveValue('');
+  await expect(page.locator('.celebration')).toHaveCount(0);
   expect((await exportData(page)).discoveries).toHaveLength(2);
 });
 
