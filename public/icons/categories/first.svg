@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="leaf" x2=".6" y2="1"><stop stop-color="#b3e74f"/><stop offset=".55" stop-color="#86d34b"/><stop offset="1" stop-color="#40ac53"/></linearGradient>
+    <linearGradient id="soil" x2="1" y2=".5"><stop stop-color="#df9c58"/><stop offset="1" stop-color="#b26b3c"/></linearGradient>
+  </defs>
+  <path d="M32 3v7M19 6l3.5 5.5M45 6l-3.5 5.5" fill="none" stroke="#ffca04" stroke-width="3.2" stroke-linecap="round"/>
+  <path d="M11 57c4-7 14-10 21-7 9-4 19 1 22 7q1 2-2 2H13q-3 0-2-2Z" fill="url(#soil)"/>
+  <path d="M32 39C15 42 6 33 4 22c0-2 10-4 15-2 9 2 12 10 13 19Zm0 0c2-16 11-23 26-20q3 0 2 3c-2 12-12 19-28 17Z" fill="url(#leaf)"/>
+  <path d="M32 40q8-15 28-20-3 20-28 19" fill="#319f4b" opacity=".32"/>
+  <path d="M32 52V40q0-7-5-12m5 14q1-8 7-14" fill="none" stroke="#70bd48" stroke-width="3.6" stroke-linecap="round"/>
+</svg>

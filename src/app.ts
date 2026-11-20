@@ -196,7 +196,7 @@ function cardBack(item: Discovery): string {
     </div>` : `<p class="muted">${t('notReviewed')}</p>`}</div>`;
 }
 function cardTopline(item: Discovery): string {
-  return `<div class="card-topline"><span class="category-tag">${categoryLabel(item)}</span><time datetime="${item.discoveredAt}">${escape(dateLabel(item.discoveredAt))}</time></div>`;
+  return `<div class="card-topline"><span class="category-tag">${categoryIcon(item.category ?? 'other')} ${t(item.category ?? 'other')}</span><time datetime="${item.discoveredAt}">${escape(dateLabel(item.discoveredAt))}</time></div>`;
 }
 function card(item: Discovery): string {
   const status = item.decision === 'pending' ? 'pending' : item.decision === 'kept' ? 'kept' : 'archived';
@@ -560,16 +560,14 @@ window.addEventListener('focus', refreshDue);
 setInterval(refreshDue, 30000);
 void init();
 
-const categoryIcons: Record<Category, string> = { first: '✦', insight: '◎', emotion: '♡', achievement: '★', other: '◇' };
-function categoryLabel(item: Pick<Discovery, 'category'>): string {
-  const category = item.category ?? 'other';
-  return `${categoryIcons[category]} ${t(category)}`;
+function categoryIcon(category: Category): string {
+  return `<img class="category-icon" src="./icons/categories/${category}.svg" alt="" draggable="false">`;
 }
 function categoryButtons(id: string, selection: readonly Category[]): string {
   return `<fieldset class="category-field" id="${id}" data-value="${selection[0] ?? ''}">
     <legend>${t('category')}</legend>
     <div class="category-buttons">${categories.map(category => `<button type="button" data-category="${category}" aria-pressed="${selection.includes(category)}">
-      <span aria-hidden="true">${categoryIcons[category]}</span><span>${t(category)}</span></button>`).join('')}</div>
+      ${categoryIcon(category)}<span>${t(category)}</span></button>`).join('')}</div>
   </fieldset>`;
 }
 function bindCategory(id: string): void {
@@ -636,7 +634,7 @@ function renderCalendar(): string {
     day.setDate(i + 1);
     const date = localInput(day).slice(0, 10);
     const records = items.filter(item => localInput(new Date(item.discoveredAt)).slice(0, 10) === date);
-    return `<button class="calendar-day" data-day="${date}" aria-pressed="${date === selectedDay}" aria-label="${date}: ${records.length} ${t('countUnit')}"><span>${i + 1}</span><span class="day-marks">${records.map(item => `<span class="category-mark ${item.decision === 'archived' ? 'archived' : ''}" title="${categoryLabel(item)}" aria-label="${categoryLabel(item)}">${categoryIcons[item.category ?? 'other']}</span>`).join('')}</span></button>`;
+    return `<button class="calendar-day" data-day="${date}" aria-pressed="${date === selectedDay}" aria-label="${date}: ${records.length} ${t('countUnit')}"><span>${i + 1}</span><span class="day-marks">${records.map(item => `<span class="category-mark ${item.decision === 'archived' ? 'archived' : ''}" title="${t(item.category ?? 'other')}" aria-label="${t(item.category ?? 'other')}">${categoryIcon(item.category ?? 'other')}</span>`).join('')}</span></button>`;
   }).join('')}</div><h2 class="selected-date">${selectedDay}</h2><div class="calendar-list">${dayItems.length ? dayItems.map(item => `<div class="calendar-entry"><article class="discovery-card ${item.decision === 'archived' ? 'archived' : ''}" tabindex="0" role="button" aria-pressed="false" data-calendar-id="${escape(item.id)}" aria-label="${escape(item.content)}. ${t('flip')}">${cardTopline(item)}<div class="card-body"><div class="calendar-front">${cardFront(item)}</div><div class="calendar-back" hidden>${cardBack(item)}</div></div><div class="card-bottom">${t('flip')}</div></article><button class="text-button" data-calendar-edit="${escape(item.id)}">${t('edit')}</button></div>`).join('') : `<p class="helper">${t('noDay')}</p>`}</div></section>`;
 }
 function monthPicker(year: number, month: number): string {

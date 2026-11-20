@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="peak" x2="1" y2="1"><stop stop-color="#438cf6"/><stop offset="1" stop-color="#0954bb"/></linearGradient>
+    <linearGradient id="slope" x2="1" y2=".65"><stop stop-color="#72d1fb"/><stop offset="1" stop-color="#3799eb"/></linearGradient>
+    <linearGradient id="flag"><stop stop-color="#ff6e63"/><stop offset=".48" stop-color="#ffab99"/><stop offset="1" stop-color="#ff7467"/></linearGradient>
+  </defs>
+  <path d="m5 24 6 1M10 13l5 5M21 6l2 7" stroke="#ffbb03" stroke-width="3" stroke-linecap="round"/>
+  <path d="M35 5c8-1 12 7 21 5 2 0 1 2 0 3-7 6-14 4-21 4Z" fill="url(#flag)"/>
+  <path d="M35 4v26" stroke="#20487d" stroke-width="3.4" stroke-linecap="round"/>
+  <path d="m2 56 11-15q3-4 7 0l7 10-8 8H4q-4 0-2-3Z" fill="url(#peak)"/>
+  <path d="m11 59 19-29q6-8 12 0l20 25q3 4-2 4Z" fill="url(#slope)"/>
+  <path d="m22 43 9-13q5-7 10 0l11 13-9-4c-2-1-2 7-5 5l-4-5c-2-2-8 8-12 4Z" fill="#fff"/>
+  <path d="m20 43 10-14q6-8 13 1l8 10" fill="none" stroke="#327dd8" stroke-width="2.3" stroke-linecap="round"/>
+</svg>

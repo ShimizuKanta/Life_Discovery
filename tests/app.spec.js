@@ -146,7 +146,7 @@ test('backup validation and cancellation preserve data, valid restore replaces s
   expect((await exportData(page)).discoveries).toHaveLength(1);
   await go(page, 'deck');
   await expect(page.locator('#discovery-card')).toContainText('<img src=x onerror=alert(1)>');
-  await expect(page.locator('#discovery-card img')).toHaveCount(0);
+  await expect(page.locator('#discovery-card .card-body img')).toHaveCount(0);
   await importData(page, { ...data, discoveries: [], settings: { language: 'en' } });
   await expect(page.locator('#language')).toHaveValue('en');
   await page.reload();
@@ -365,7 +365,7 @@ test('v2 photos, category filters, random cards, calendar and offline backup rou
   await expect(page.locator('.deck-position')).toHaveText('1 / 2');
   await page.locator('#filter-category [data-category="insight"]').click();
   await expect(page.locator('#discovery-card')).toContainText('写真付きの初体験');
-  await expect(page.locator('#discovery-card img')).toBeVisible();
+  await expect(page.locator('#discovery-card .discovery-photo')).toBeVisible();
   await expect(page.locator('.deck-position')).toHaveText('1 / 1');
   await page.locator('#random-card').click();
   await expect(page.locator('.deck-position')).toHaveText('1 / 1');
@@ -410,7 +410,7 @@ test('v2 photos, category filters, random cards, calendar and offline backup rou
   await go(page, 'deck');
   await page.locator('#filter-category [data-category="other"]').click();
   await page.locator('#filter-category [data-category="insight"]').click();
-  await expect(page.locator('#discovery-card img')).toBeVisible();
+  await expect(page.locator('#discovery-card .discovery-photo')).toBeVisible();
   await page.screenshot({ path: 'test-results/version2-photo.png', fullPage: true });
 });
 
@@ -431,6 +431,7 @@ test('five horizontal category buttons and camera attachment work in new and edi
   await page.setViewportSize({ width: 320, height: 740 });
   const buttons = page.locator('#new-category .category-buttons button');
   await expect(buttons).toHaveCount(5);
+  await expect.poll(() => buttons.locator('img').evaluateAll(images => images.filter(image => image.naturalWidth > 0).length)).toBe(5);
   const rows = await buttons.evaluateAll(elements => elements.map(el => Math.round(el.getBoundingClientRect().top)));
   expect(new Set(rows).size).toBe(1);
   await buttons.nth(2).click();
@@ -471,7 +472,7 @@ test('card size stays fixed across photos and faces, and long text remains scrol
   await page.keyboard.press('ArrowDown');
   expect(await body.evaluate(el => el.scrollTop)).toBeGreaterThan(0);
   await page.locator('#next').click();
-  await expect(card.locator('img')).toBeVisible();
+  await expect(card.locator('.discovery-photo')).toBeVisible();
   expect((await card.boundingBox()).height).toBe(height);
   expect(await card.locator('.card-content').evaluate(el => parseFloat(getComputedStyle(el).fontSize))).toBeGreaterThan(longSize);
   const frontColor = await card.evaluate(el => getComputedStyle(el).backgroundImage);
