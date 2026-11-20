@@ -116,12 +116,12 @@ function renderNew(): string {
     <form id="new-form">
       <div class="card-stack writing-stack"><div class="writing-card">
         <label for="content">${t('content')}</label>
-        <textarea id="content" name="content" required placeholder="${t('placeholder')}" rows="4">${escape(draft.content)}</textarea>
+        <textarea id="content" name="content" required placeholder="${t('placeholder')}" rows="3">${escape(draft.content)}</textarea>
         ${metadataFields('new', draft)}
         <div class="date-row"><label for="discovered-at">${t('date')}</label><input id="discovered-at" name="discoveredAt" type="datetime-local" required value="${escape(draft.date)}"></div>
       </div></div>
-      ${photoHelp()}
       <button class="primary record-button" type="submit">${t('record')}</button>
+      ${photoHelp()}
       <p class="local-note"><span aria-hidden="true">⌂</span> ${t('local')}</p>
     </form></section>`;
 }

@@ -8,7 +8,7 @@ const ja = {
 
   tagline: '日々の小さな発見を、未来の自分へ。', new: '発見を記録', weekly: '1週間後の判定', yearly: '1年後の振り返り', deck: '発見のカードデッキ', settings: '設定',
   menu: 'メニューを開く', close: '閉じる', add: '＋ 発見', waiting: '待ち',
-  eyebrow: 'A LITTLE DISCOVERY', title: '今日、どんな発見が\nありましたか？', intro: '初めてのこと。心が動いたこと。\n忘れたくない小さな気づきを、ひとつ。',
+  eyebrow: 'A LITTLE DISCOVERY', title: '今日、どんな発見が\nありましたか？', intro: '初めてのこと。気づいたこと。人生の小さな発見を記録しましょう。',
   content: '発見したこと', placeholder: 'たとえば、いつもの道に小さな花屋さんを見つけた。', date: '発見した日時', record: '＋ 発見を記録',
   saved: '発見を記録しました', local: 'この端末に、大切に保存します。',
   weeklyTitle: 'この発見、今も大切？', weeklyIntro: '少し時間がたった今の気持ちで選んでみよう。',
@@ -34,7 +34,7 @@ const en: Record<MessageKey, string> = {
 
   tagline: 'Little discoveries, for your future self.', new: 'New discovery', weekly: 'One-week check-in', yearly: 'One-year reflection', deck: 'Discovery deck', settings: 'Settings',
   menu: 'Open menu', close: 'Close', add: '+ Discovery', waiting: 'waiting',
-  eyebrow: 'A LITTLE DISCOVERY', title: 'What did you\ndiscover today?', intro: 'A first experience. A moment that moved you.\nOne little thing you want to remember.',
+  eyebrow: 'A LITTLE DISCOVERY', title: 'What did you\ndiscover today?', intro: 'Record life’s firsts, insights, and little discoveries.',
   content: 'Your discovery', placeholder: 'I found a tiny flower shop on my usual walk.', date: 'Date and time of discovery', record: '+ Save discovery', saved: 'Discovery saved', local: 'Kept safely on this device.',
   weeklyTitle: 'Does it still matter to you?', weeklyIntro: 'A little time has passed. How do you feel now?', keep: 'Keep', archive: 'Archive', skip: 'Later', archiveNote: 'Archiving is not deleting. You can restore it anytime.', weeklyHint: '← Archive · ↑ Later · Keep →', judged: 'Decision saved',
   yearlyTitle: 'One year later.\nWhat does it mean to you now?', yearlyIntro: 'What has changed, and what has stayed with you?', score: 'How much it matters now', low: 'Less now', middle: 'Still matters', high: 'More than before', lowFull: 'It does not matter as much now', comment: 'A change or an update (optional)', commentPlaceholder: 'Leave a few words about how you feel now.', reviewSave: 'Save reflection', reviewed: 'Reflection saved', yearlyHint: '← Later · Save →',

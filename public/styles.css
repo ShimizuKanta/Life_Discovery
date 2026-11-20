@@ -200,10 +200,16 @@ main {
 .new-page {
   position:relative;
 }
+main:has(> .new-page) {
+  padding-block:16px calc(24px + env(safe-area-inset-bottom));
+}
+.app-shell:has(.new-page) .header {
+  height:calc(58px + env(safe-area-inset-top));
+}
 .intro-plant {
   position:absolute;
-  right:-4px;
-  top:12px;
+  right:0;
+  top:0;
   opacity:.9;
   pointer-events:none;
 }
@@ -212,14 +218,24 @@ main {
   height:124px;
 }
 .new-page .page-heading {
-  padding-top:10px;
-  max-width:420px;
+  position:relative;
+  margin-bottom:14px;
 }
 .new-page .page-heading h1 {
-  font-size:31px;
+  font-size:clamp(1.4rem, 5.4vw, 2rem);
+  line-height:1.25;
 }
-.new-page .page-heading {
-  position:relative;
+.new-page .eyebrow {
+  margin-bottom:4px;
+}
+.new-page .page-heading p {
+  font-size:clamp(.625rem, 2.95vw, .875rem);
+  line-height:1.6;
+  margin-top:8px;
+}
+.intro-plant .plant {
+  width:60px;
+  height:60px;
 }
 .writing-card {
   background:var(--paper);
@@ -294,9 +310,9 @@ main {
   background:#dfe8d3;
 }
 .record-button {
+  display:block;
   width:100%;
-  margin-top:20px;
-  min-height:56px;
+  min-height:46px;
   letter-spacing:.06em;
 }
 .local-note {
@@ -931,26 +947,8 @@ details[open] summary:before {
   .header {
     height:110px;
   }
-  .new-page {
-    padding-top:25px;
-  }
-  .new-page .page-heading {
-    max-width:460px;
-    margin-bottom:36px;
-  }
-  .new-page .page-heading h1 {
-    font-size:35px;
-  }
-  .intro-plant {
-    top:42px;
-    right:0;
-    transform:translateX(25px);
-  }
   main {
     padding-top:48px;
-  }
-  .new-page .page-heading p {
-    font-size:14px;
   }
   .review-page .page-heading,.settings-page .page-heading {
     margin-top:8px;
@@ -972,26 +970,10 @@ details[open] summary:before {
   main {
     padding:27px 22px 130px;
   }
-  .intro-plant {
-    top:15px;
-    right:0;
-  }
+  main:has(> .new-page) { padding-inline:16px; }
+  .new-page .page-heading p { margin-inline:min(0px, calc(50vw - 171px)); }
   .intro-plant .plant {
-    width:88px;
-    height:88px;
     opacity:.6;
-  }
-  .new-page .page-heading {
-    padding-top:8px;
-  }
-  .new-page .page-heading h1 {
-    font-size:27px;
-    position:relative;
-    z-index:1;
-  }
-  .new-page .page-heading p {
-    font-size:12px;
-    margin-top:15px;
   }
   .eyebrow {
     font-size:9px;
@@ -1013,9 +995,6 @@ details[open] summary:before {
     font-size:14px;
     width:100%;
     padding:8px;
-  }
-  .record-button {
-    margin-top:17px;
   }
   .page-heading {
     margin-bottom:24px;
@@ -1245,6 +1224,9 @@ body {
 .yearly-card #review-comment { min-height: 64px; margin-bottom: 8px; }
 .yearly-card .gesture-hint { margin-bottom: 8px; }
 
+.writing-stack { margin-bottom: 20px; }
+.writing-stack::before { transform: translateY(6px) rotate(-1deg); }
+.writing-stack::after { transform: translateY(3px) rotate(.6deg); }
 .writing-card {
   position: relative;
   z-index: 1;
@@ -1256,7 +1238,7 @@ body {
 .writing-card > label, .writing-card .date-row label,
 .category-field legend, .photo-label { font-size: .875rem; font-weight: 600; color: inherit; }
 .writing-card textarea {
-  min-height: 132px;
+  min-height: 5rem;
   padding: 8px;
   margin-bottom: 6px;
   font-size: 1.125rem;
@@ -1265,6 +1247,23 @@ body {
 .writing-card textarea::placeholder { color: #627257; }
 .writing-card :is(.metadata-fields, .date-row) { border-color: #91a77b; }
 .writing-card .metadata-fields { padding-top: 4px; }
+.writing-card .metadata-fields:has(.discovery-photo) {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  grid-template-areas: "category category category" "label preview remove" "actions actions actions";
+  align-items: center;
+  column-gap: 6px;
+}
+.writing-card .category-field { grid-area: category; }
+.writing-card .photo-label { grid-area: label; }
+#new-preview { grid-area: preview; }
+#new-preview img { width: 40px; height: 40px; margin: 0; border-radius: 6px; }
+#new-remove-photo { grid-area: remove; }
+.writing-card .photo-actions { grid-area: actions; }
+.writing-card .category-field { margin: 4px 0 8px; }
+.writing-card .category-field legend, .writing-card .photo-label { margin: 0 0 4px; }
+.writing-card .date-row { padding-top: 8px; }
+.writing-card .date-row input { width: auto; flex: 1; }
 .writing-card .category-buttons button {
   min-height: 49px;
   gap: 1px;
@@ -1276,6 +1275,18 @@ body {
 .writing-card .photo-actions button { padding: 8px 5px; }
 .photo-icon { width: 1.125rem; height: 1.125rem; flex: none; }
 .photo-help { margin: 20px 0 0; text-align: left; }
+.new-page .photo-help { margin-top: 10px; }
+@media (max-height: 650px) {
+  .app-shell:has(.new-page) .header { height: calc(48px + env(safe-area-inset-top)); }
+  main:has(> .new-page) { padding-top: 8px; }
+  .new-page .intro-plant { display: none; }
+  .new-page .page-heading { margin-bottom: 8px; }
+  .new-page .page-heading h1 { white-space: normal; font-size: 1.125rem; }
+  .new-page .page-heading p { margin-top: 4px; }
+  .writing-card { padding-block: 10px; }
+  .writing-card textarea { height: 4.25rem; min-height: 4.25rem; font-size: 1rem; line-height: 1.6; }
+  .writing-card .photo-actions button { min-height: 44px; }
+}
 .edit-dialog .photo-actions .secondary { margin-top: 0; }
 .edit-dialog .edit-review { margin: 18px 0 0; padding: 8px 12px 12px; border: 1px solid var(--line); border-radius: 12px; min-inline-size: 0; }
 .edit-review legend { padding: 0 4px; font-size: .875rem; font-weight: 600; }

@@ -41,6 +41,26 @@ async function gesture(page, direction) {
 
 test.beforeEach(async ({ page }) => { await page.goto('./'); await expect(page.locator('#content')).toBeVisible(); });
 
+test('record subtitle and save button fit the initial mobile viewport', async ({ page }) => {
+  const subtitle = page.locator('.new-page .page-heading p');
+  const save = page.locator('#new-form button[type="submit"]');
+  await expect(subtitle).toHaveText('初めてのこと。気づいたこと。人生の小さな発見を記録しましょう。');
+  for (const viewport of [{ width: 320, height: 568 }, { width: 375, height: 667 }, { width: 390, height: 844 }]) {
+    await page.setViewportSize(viewport);
+    expect(await subtitle.evaluate(element => {
+      const range = document.createRange();
+      range.selectNodeContents(element);
+      return range.getClientRects().length;
+    })).toBe(1);
+    const box = await save.boundingBox();
+    const card = await page.locator('.writing-card').boundingBox();
+    expect(box.y).toBeGreaterThan(card.y + card.height + 12);
+    expect(box.y + box.height).toBeLessThanOrEqual(viewport.height);
+  }
+  const saveBox = await save.boundingBox();
+  expect((await page.locator('#new-form .photo-help').boundingBox()).y).toBeGreaterThanOrEqual(saveBox.y + saveBox.height);
+});
+
 test('record, persist, judge, review, flip, edit, archive restore and delete', async ({ page }) => {
   await add(page, '初めてパンを焼いた');
   await page.reload();
@@ -414,6 +434,9 @@ test('five horizontal category buttons and camera attachment work in new and edi
   expect(await chooser.element().getAttribute('capture')).toBe('environment');
   await chooser.setFiles('public/icons/icon-192.png');
   await expect(page.locator('#new-preview img')).toBeVisible();
+  await expect(page.locator('.record-button')).toBeInViewport({ ratio: 1 });
+  const card = await page.locator('.writing-card').boundingBox();
+  expect((await page.locator('.record-button').boundingBox()).y).toBeGreaterThan(card.y + card.height + 12);
   await add(page, 'カメラからの写真');
   await go(page, 'deck');
   await expect(page.locator('#discovery-card')).toContainText('感動');
