@@ -88,14 +88,15 @@ test('record, persist, judge, review, flip, edit, archive restore and delete', a
   await expect(page.locator('#edit-score')).toHaveValue('85');
   await page.locator('#edit-score').press('End');
   await page.locator('#edit-review-comment').fill('今では毎週末焼いている');
-  await page.locator('#edit-form button[type="submit"]').click();
+  await page.locator('#edit-form .primary').click();
   await expect(page.locator('#editor')).not.toBeVisible();
   const data = await exportData(page);
   expect(data.discoveries[0].content).toBe('パン作りが好きになった');
   expect(data.discoveries[0].review).toMatchObject({ score: 100, comment: '今では毎週末焼いている' });
-  data.discoveries[0].decision = 'archived';
-  await importData(page, data);
   await go(page, 'deck');
+  await page.getByRole('button', { name: '長押しで編集' }).click();
+  await expect(page.locator('#editor .photo-help')).toHaveCount(0);
+  await page.locator('#edit-archive').click();
   await expect(page.locator('#discovery-card')).toHaveCount(0);
   await page.locator('#include-archived').check();
   await expect(page.locator('#discovery-card')).toHaveClass(/archived/);
@@ -170,7 +171,7 @@ test('all primary operations work offline under a GitHub Pages project path', as
   await go(page, 'deck');
   await page.locator('#edit-card').click();
   await page.locator('#edit-content').fill('オフラインで編集');
-  await page.locator('#edit-form button[type="submit"]').click();
+  await page.locator('#edit-form .primary').click();
   const data = await exportData(page);
   expect(data.discoveries[0].content).toBe('オフラインで編集');
   expect(data.discoveries[0].review.comment).toBe('オフラインで振り返り');
@@ -188,14 +189,14 @@ test('future dates, edits, filters and pending badges follow discovery dates', a
   await go(page, 'deck');
   await page.locator('#edit-card').click();
   await page.locator('#edit-date').fill('2020-01-01T12:00');
-  await page.locator('#edit-form button[type="submit"]').click();
+  await page.locator('#edit-form .primary').click();
   await go(page, 'weekly');
   await expect(page.locator('#discovery-card')).toContainText('未来の発見');
   await page.locator('#keep').click();
   await go(page, 'yearly');
   await page.locator('#edit-card').click();
   await page.locator('#edit-date').fill('2099-01-01T12:00');
-  await page.locator('#edit-form button[type="submit"]').click();
+  await page.locator('#edit-form .primary').click();
   await expect(page.locator('#discovery-card')).toHaveCount(0);
   await go(page, 'new');
   await add(page, '昨日の発見', '2025-01-02T23:59');
@@ -301,7 +302,7 @@ test('editing a discovery out of the annual queue does not move its unfinished a
   await page.locator('#review-comment').fill('一つ目だけの回答');
   await page.locator('#edit-card').click();
   await page.locator('#edit-date').fill('2099-01-01T12:00');
-  await page.locator('#edit-form button[type="submit"]').click();
+  await page.locator('#edit-form .primary').click();
   await expect(page.locator('#discovery-card')).toContainText('二つ目の発見');
   await expect(page.locator('#score')).toHaveValue('50');
   await expect(page.locator('#review-comment')).toHaveValue('');
@@ -403,7 +404,7 @@ test('v2 photos, category filters, random cards, calendar and offline backup rou
   await page.locator('[data-calendar-edit]').first().click();
   await page.locator('#edit-remove-photo').click();
   await page.locator('#edit-category [data-category="achievement"]').click();
-  await page.locator('#edit-form button[type=submit]').click();
+  await page.locator('#edit-form .primary').click();
   expect((await exportData(page)).discoveries.find(item => item.content === '写真付きの初体験').photo).toBeNull();
   await importData(page, backup);
   await page.reload();
@@ -452,7 +453,7 @@ test('five horizontal category buttons and camera attachment work in new and edi
   await expect(page.locator('#edit-category [data-category="emotion"]')).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('#edit-camera')).toHaveAttribute('capture', 'environment');
   await page.locator('#edit-category [data-category="achievement"]').click();
-  await page.locator('#edit-form button[type=submit]').click();
+  await page.locator('#edit-form .primary').click();
   await expect(page.locator('#discovery-card')).toContainText('達成');
 });
 
