@@ -1,6 +1,6 @@
 import { preparePhoto, validatePhotos } from './photos.js';
-import { categories, createDiscovery, decide, filterDeck, localInput, parseBackup, weeklyDue, yearlyDue } from './core.js';
-import type { Backup, Category, Discovery, Language, Settings } from './core.js';
+import { elapsedMonths, categories, createDiscovery, decide, filterDeck, localInput, parseBackup, weeklyDue, yearlyDue } from './core.js';
+import type { Backup, Category, Discovery, Language, Review, Settings } from './core.js';
 import { browserLanguage, translator } from './i18n.js';
 import type { MessageKey } from './i18n.js';
 import * as storage from './storage.js';
@@ -186,21 +186,42 @@ function cardFront(item: Discovery): string {
   return `<div class="card-front ${item.photo ? 'with-photo' : ''}">${photoMarkup(item)}${cardText(item.content)}
     ${item.decision === 'archived' ? `<span class="status-pill">${t('archived')}</span>` : ''}</div>`;
 }
+function reviewHeading(item: Discovery, review: Review): string {
+  const date = new Date(review.reviewedAt);
+  const ja = settings.language === 'ja';
+  let label = t('reviewLabel');
+  if (review !== item.review) {
+    const months = elapsedMonths(new Date(item.discoveredAt), date);
+    const years = Math.floor(months / 12);
+    const remainder = months % 12;
+    if (ja) label = `${years ? years + '年' : ''}${remainder}ヶ月後の気持ち`;
+    else label = [years && `${years} year${years === 1 ? '' : 's'}`, `${remainder} month${remainder === 1 ? '' : 's'} later`].filter(Boolean).join(' ');
+  }
+  const day = date.toLocaleDateString(ja ? 'ja-JP' : 'en-GB', { year: 'numeric', month: 'long', day: 'numeric' });
+  return ja ? `${label}（${day}）` : `${label} (${day})`;
+}
+function reviewHistory(item: Discovery): Review[] {
+  const history = [...(item.extraReviews ?? [])];
+  if (item.review) history.push(item.review);
+  return history.sort((a, b) => b.reviewedAt.localeCompare(a.reviewedAt));
+}
 function cardBack(item: Discovery): string {
   const status = item.decision === 'pending' ? 'pending' : item.decision === 'kept' ? 'kept' : 'archived';
+  const history = reviewHistory(item);
   return `<div class="card-back"><span class="small-label">${t('status')}</span><p class="status-pill">${t(status)}</p>
-    ${item.review ? `<div class="saved-review">
-      <div class="score-heading"><span>${t('reviewLabel')}</span><strong>${item.review.score}%</strong></div>
-      <input class="saved-score" type="range" min="0" max="100" value="${item.review.score}" style="--score-color: ${scoreColor(item.review.score)}" aria-label="${t('reviewLabel')}" aria-valuetext="${item.review.score}%" disabled>
-      ${cardText(item.review.comment)}<small>${escape(dateLabel(item.review.reviewedAt))}</small>
-    </div>` : `<p class="muted">${t('notReviewed')}</p>`}</div>`;
+    ${history.map(review => {
+      const heading = reviewHeading(item, review);
+      return `<div class="saved-review"><div class="score-heading"><span>${heading}</span><strong>${review.score}%</strong></div>
+        <input class="saved-score" type="range" min="0" max="100" value="${review.score}" style="--score-color: ${scoreColor(review.score)}" aria-label="${heading}" aria-valuetext="${review.score}%" disabled>
+        ${cardText(review.comment)}</div>`;
+    }).join('')}${item.review ? '' : `<p class="muted">${t('notReviewed')}</p>`}</div>`;
 }
 function cardTopline(item: Discovery): string {
   return `<div class="card-topline"><span class="category-tag">${categoryIcon(item.category ?? 'other')} ${t(item.category ?? 'other')}</span><time datetime="${item.discoveredAt}">${escape(dateLabel(item.discoveredAt))}</time></div>`;
 }
 function card(item: Discovery): string {
   const status = item.decision === 'pending' ? 'pending' : item.decision === 'kept' ? 'kept' : 'archived';
-  const spokenContent = flipped ? `${t(status)}. ${item.review ? `${item.review.score}%. ${item.review.comment}` : t('notReviewed')}` : item.content;
+  const spokenContent = flipped ? `${t(status)}. ${reviewHistory(item).map(review => `${reviewHeading(item, review)}. ${review.score}%. ${review.comment}`).join('. ') || t('notReviewed')}` : item.content;
   const cardLabel = escape(`${dateLabel(item.discoveredAt)}. ${spokenContent}. ${t(flipped ? 'flipBack' : 'flip')}`);
   return `<div class="card-stack"><article class="discovery-card ${page}-card ${item.decision === 'archived' ? 'archived' : ''} ${flipped ? 'flipped' : ''}" id="discovery-card" tabindex="0" role="${page === 'yearly' ? 'group' : 'button'}" aria-label="${cardLabel}" ${page === 'yearly' ? '' : `aria-pressed="${flipped}"`}>
     ${cardTopline(item)}
@@ -410,12 +431,26 @@ function scrollCardWithKeys(event: KeyboardEvent, card: HTMLElement): void {
 function openEditor(item: Discovery): void {
   if (busy || moving) return;
   const metadata = { category: item.category ?? 'other', photo: item.photo ?? null };
+  const extras = (item.extraReviews ?? []).map(review => ({ ...review }));
   const review = item.review && { ...item.review };
   const dialog = $<HTMLDialogElement>('#editor');
-  dialog.innerHTML = `<form id="edit-form"><div class="dialog-heading"><h2 id="edit-title">${t('editTitle')}</h2><button type="button" id="edit-close" class="icon-button" aria-label="${t('close')}">×</button></div><label for="edit-content">${t('content')}</label><textarea id="edit-content" rows="5" required>${escape(item.content)}</textarea>${metadataFields('edit', metadata)}<label for="edit-date">${t('date')}</label><input id="edit-date" type="datetime-local" required value="${localInput(new Date(item.discoveredAt))}">${review ? `<fieldset class="edit-review"><legend>${t('editReview')}</legend>${reviewFields('edit-', review)}</fieldset>` : ''}<p class="helper">${t(item.decision === 'archived' ? 'archived' : item.decision === 'kept' ? 'kept' : 'pending')}</p><button class="primary" type="submit">${t('save')}</button><button id="${item.decision === 'archived' ? 'restore' : 'edit-archive'}" type="submit" class="secondary">${t(item.decision === 'archived' ? 'restore' : 'archive')}</button><div class="dialog-footer"><button id="delete" type="button" class="danger text-button" data-mutate>${t('delete')}</button><button id="edit-cancel" type="button" class="text-button">${t('cancel')}</button></div></form>`;
+  dialog.innerHTML = `<form id="edit-form"><div class="dialog-heading"><h2 id="edit-title">${t('editTitle')}</h2><button type="button" id="edit-close" class="icon-button" aria-label="${t('close')}">×</button></div><label for="edit-content">${t('content')}</label><textarea id="edit-content" rows="5" required>${escape(item.content)}</textarea>${metadataFields('edit', metadata)}<label for="edit-date">${t('date')}</label><input id="edit-date" type="datetime-local" required value="${localInput(new Date(item.discoveredAt))}">${review ? `<fieldset class="edit-review"><legend>${t('editReview')}</legend>${reviewFields('edit-', review)}</fieldset>` : ''}<div id="extra-reviews"></div><button type="button" id="add-review" class="secondary">${t('addReview')}</button><p class="helper">${t(item.decision === 'archived' ? 'archived' : item.decision === 'kept' ? 'kept' : 'pending')}</p><button class="primary" type="submit">${t('save')}</button><button id="${item.decision === 'archived' ? 'restore' : 'edit-archive'}" type="submit" class="secondary">${t(item.decision === 'archived' ? 'restore' : 'archive')}</button><div class="dialog-footer"><button id="delete" type="button" class="danger text-button" data-mutate>${t('delete')}</button><button id="edit-cancel" type="button" class="text-button">${t('cancel')}</button></div></form>`;
   dialog.showModal();
   bindMetadata('edit', metadata);
   if (review) bindReviewFields('edit-', review);
+  const appendReviewFields = (entry: Review, index: number) => {
+    const prefix = `extra-${index}-`;
+    $('#extra-reviews').insertAdjacentHTML('beforeend', `<fieldset class="edit-review"><legend>${reviewHeading(item, entry)}</legend>${reviewFields(prefix, entry)}</fieldset>`);
+    bindReviewFields(prefix, entry);
+  };
+  extras.forEach(appendReviewFields);
+  $('#add-review').onclick = () => {
+    const entry = { score: 50, comment: '', reviewedAt: new Date().toISOString() };
+    const index = extras.length;
+    extras.push(entry);
+    appendReviewFields(entry, index);
+    $(`#extra-${index}-score`).focus();
+  };
   const close = () => { if (!busy) dialog.close(); };
   $('#edit-close').onclick = close; $('#edit-cancel').onclick = close;
   dialog.oncancel = event => { if (busy) event.preventDefault(); };
@@ -427,7 +462,7 @@ function openEditor(item: Discovery): void {
     void perform(async () => {
       const button = event.submitter ?? $('#edit-form .primary');
       const origin = button.getBoundingClientRect();
-      const changed = { ...item, ...metadata, content, review: review && { ...review, comment: review.comment.trim() }, discoveredAt: date === localInput(new Date(item.discoveredAt)) ? item.discoveredAt : new Date(date).toISOString(), updatedAt: new Date().toISOString() };
+      const changed = { ...item, ...metadata, content, ...(extras.length ? { extraReviews: extras.map(entry => ({ ...entry, comment: entry.comment.trim() })) } : {}), review: review && { ...review, comment: review.comment.trim() }, discoveredAt: date === localInput(new Date(item.discoveredAt)) ? item.discoveredAt : new Date(date).toISOString(), updatedAt: new Date().toISOString() };
       const decision = button.id === 'restore' ? 'kept' : button.id === 'edit-archive' ? 'archived' : undefined;
       const result = decision ? decide(changed, decision) : changed;
       await storage.saveDiscovery(result); updateItem(result); dialog.close(); render();
@@ -452,7 +487,8 @@ function bindSettings(): void {
   $('#export').onclick = () => {
     void perform(async () => {
       const data = await storage.readAll();
-      const backup: Backup = { schemaVersion: 2, exportedAt: new Date().toISOString(), discoveries: data.discoveries.map(item => ({ ...item, category: item.category ?? 'other', photo: item.photo ?? null })), settings: data.settings ?? settings };
+      const hasExtras = data.discoveries.some(item => item.extraReviews?.length);
+      const backup: Backup = { schemaVersion: hasExtras ? 3 : 2, exportedAt: new Date().toISOString(), discoveries: data.discoveries.map(item => ({ ...item, ...(hasExtras ? { extraReviews: item.extraReviews ?? [] } : {}), category: item.category ?? 'other', photo: item.photo ?? null })), settings: data.settings ?? settings };
       const url = URL.createObjectURL(new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' }));
       const link = document.createElement('a'); link.href = url;
       link.download = `life-discovery-backup-${localInput().replace(/[:T]/g, '-')}.json`;

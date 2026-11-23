@@ -2,6 +2,7 @@ export const categories = ['first', 'insight', 'emotion', 'achievement', 'other'
 export type Category = typeof categories[number];
 export type Language = 'ja' | 'en';
 export type Decision = 'pending' | 'kept' | 'archived';
+export interface Review { score: number; comment: string; reviewedAt: string }
 export interface Discovery {
   category?: Category;
   photo?: string | null;
@@ -12,10 +13,11 @@ export interface Discovery {
   updatedAt: string;
   decision: Decision;
   decidedAt: string | null;
-  review: { score: number; comment: string; reviewedAt: string } | null;
+  review: Review | null;
+  extraReviews?: Review[];
 }
 export interface Settings { language: Language }
-export interface Backup { schemaVersion: 1 | 2; exportedAt: string; discoveries: Discovery[]; settings: Settings }
+export interface Backup { schemaVersion: 1 | 2 | 3; exportedAt: string; discoveries: Discovery[]; settings: Settings }
 
 export function localInput(date = new Date()): string {
   const pad = (n: number) => String(n).padStart(2, '0');
@@ -27,6 +29,11 @@ export function anniversary(value: string): Date {
   date.setFullYear(date.getFullYear() + 1);
   if (date.getMonth() !== month) date.setDate(0);
   return date;
+}
+export function elapsedMonths(from: Date, to: Date): number {
+  const months = (to.getFullYear() - from.getFullYear()) * 12 + to.getMonth() - from.getMonth();
+  const lastDay = new Date(to.getFullYear(), to.getMonth() + 1, 0).getDate();
+  return Math.max(0, months - Number(to.getDate() < Math.min(from.getDate(), lastDay)));
 }
 export function weeklyDue(item: Discovery, now = new Date()): boolean {
   return item.decision === 'pending' && now.getTime() >= new Date(item.discoveredAt).getTime() + 7 * 24 * 60 * 60 * 1000;
@@ -56,10 +63,14 @@ function timestamp(value: unknown): value is string {
   return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value)
     && Number.isFinite(Date.parse(value)) && new Date(value).toISOString() === value;
 }
+function validReview(value: unknown): value is Review {
+  return object(value) && typeof value.score === 'number' && Number.isInteger(value.score)
+    && value.score >= 0 && value.score <= 100 && typeof value.comment === 'string' && timestamp(value.reviewedAt);
+}
 export function parseBackup(raw: string): Backup {
   const value: unknown = JSON.parse(raw);
   const fail = (): never => { throw new Error('Invalid backup'); };
-  if (!object(value) || (value.schemaVersion !== 1 && value.schemaVersion !== 2) || !timestamp(value.exportedAt)
+  if (!object(value) || (value.schemaVersion !== 1 && value.schemaVersion !== 2 && value.schemaVersion !== 3) || !timestamp(value.exportedAt)
     || !object(value.settings) || !['ja', 'en'].includes(String(value.settings.language)) || !Array.isArray(value.discoveries)) return fail();
   const ids = new Set<string>();
   const discoveries: Discovery[] = value.discoveries.map((item: unknown) => {
@@ -70,15 +81,16 @@ export function parseBackup(raw: string): Backup {
       || !(item.decidedAt === null || timestamp(item.decidedAt))
       || (item.decision === 'pending' ? item.decidedAt !== null || item.review !== null : item.decidedAt === null)) return fail();
     const review = item.review;
-    if (review !== null && (!object(review) || typeof review.score !== 'number' || !Number.isInteger(review.score)
-      || review.score < 0 || review.score > 100 || typeof review.comment !== 'string' || !timestamp(review.reviewedAt))) return fail();
-    if (value.schemaVersion === 2 && (!categories.includes(item.category as Category)
+    if (review !== null && !validReview(review)) return fail();
+    const extraReviews = value.schemaVersion === 3 ? item.extraReviews : undefined;
+    if (value.schemaVersion === 3 && (!Array.isArray(extraReviews) || !extraReviews.every(validReview))) return fail();
+    if (value.schemaVersion !== 1 && (!categories.includes(item.category as Category)
       || !(item.photo === null || (typeof item.photo === 'string' && item.photo.length <= 3 * 1024 * 1024
         && /^data:image\/jpeg;base64,\/9j\/[A-Za-z0-9+/]*={0,2}$/.test(item.photo))))) return fail();
     ids.add(item.id);
-    return { ...(value.schemaVersion === 2 ? { category: item.category as Category, photo: item.photo as string | null } : {}), id: item.id, content: item.content, discoveredAt: item.discoveredAt, createdAt: item.createdAt,
+    return { ...(Array.isArray(extraReviews) ? { extraReviews } : {}), ...(value.schemaVersion !== 1 ? { category: item.category as Category, photo: item.photo as string | null } : {}), id: item.id, content: item.content, discoveredAt: item.discoveredAt, createdAt: item.createdAt,
       updatedAt: item.updatedAt, decision: item.decision as Decision, decidedAt: item.decidedAt,
-      review: review === null ? null : { score: review.score as number, comment: review.comment as string, reviewedAt: review.reviewedAt as string } };
+      review };
   });
-  return { schemaVersion: value.schemaVersion as 1 | 2, exportedAt: value.exportedAt, settings: { language: value.settings.language as Language }, discoveries };
+  return { schemaVersion: value.schemaVersion as 1 | 2 | 3, exportedAt: value.exportedAt, settings: { language: value.settings.language as Language }, discoveries };
 }

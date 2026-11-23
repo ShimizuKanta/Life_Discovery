@@ -1359,3 +1359,5 @@ body {
 .saved-review .score-heading { font-size: .875rem; }
 .saved-review .score-heading strong { font-size: 1.5rem; }
 .saved-review .saved-score { opacity: 1; cursor: inherit; pointer-events: none; }
+
+.saved-review + .saved-review { margin-top: 18px; }

@@ -483,3 +483,34 @@ test('card size stays fixed across photos and faces, and long text remains scrol
   expect((await card.boundingBox()).height).toBe(height);
   expect(await card.evaluate(el => getComputedStyle(el).backgroundImage)).not.toBe(frontColor);
 });
+
+test('additional reflections survive backup and leave the annual review due', async ({ page }) => {
+  await page.clock.setFixedTime(new Date('2024-03-31T12:00:00+09:00'));
+  await add(page, '評価を重ねる', '2024-01-31T12:00');
+  await go(page, 'weekly');
+  await page.locator('#keep').click();
+  await go(page, 'deck');
+  await page.locator('#edit-card').click();
+  await page.locator('#add-review').click();
+  await page.locator('#extra-0-review-comment').fill('春の気持ち');
+  await page.locator('#edit-form .primary').click();
+  await page.clock.setFixedTime(new Date('2026-02-28T12:00:00+09:00'));
+  await page.locator('#edit-card').click();
+  await page.locator('#add-review').click();
+  await page.locator('#extra-1-review-comment').fill('今の気持ち');
+  await page.locator('#edit-form .primary').click();
+  const backup = await exportData(page);
+  expect(backup.schemaVersion).toBe(3);
+  await importData(page, backup);
+  await go(page, 'yearly');
+  await page.locator('#review-form button[type=submit]').click();
+  await go(page, 'deck');
+  await page.locator('#discovery-card').click();
+  const back = page.locator('#discovery-card');
+  await expect(back.locator('.saved-score')).toHaveCount(3);
+  await expect(back).toContainText('2ヶ月後の気持ち（2024年3月31日）');
+  await expect(back).toContainText('2年1ヶ月後の気持ち（2026年2月28日）');
+  await expect(back).toContainText('1年後の気持ち（2026年2月28日）');
+  await expect(back).toContainText('春の気持ち');
+  await expect(back).toContainText('今の気持ち');
+});
