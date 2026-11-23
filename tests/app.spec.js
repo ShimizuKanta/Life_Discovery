@@ -513,4 +513,21 @@ test('additional reflections survive backup and leave the annual review due', as
   await expect(back).toContainText('1年後の気持ち（2026年2月28日）');
   await expect(back).toContainText('春の気持ち');
   await expect(back).toContainText('今の気持ち');
+
+  await page.locator('#edit-card').click();
+  await page.locator('#extra-0-fields .delete-review').click();
+  await page.locator('#edit-cancel').click();
+  await expect(back.locator('.saved-score')).toHaveCount(3);
+
+  await page.locator('#edit-card').click();
+  await page.locator('#extra-0-fields .delete-review').click();
+  await page.locator('#add-review').click();
+  await page.locator('#extra-2-fields .delete-review').click();
+  await page.locator('#edit-annual-review .delete-review').click();
+  await page.locator('#edit-form .primary').click();
+  const updated = await exportData(page);
+  expect(updated.discoveries[0].review).toBeNull();
+  expect(updated.discoveries[0].extraReviews.map(entry => entry.comment)).toEqual(['今の気持ち']);
+  await go(page, 'yearly');
+  await expect(page.locator('#review-form')).toBeVisible();
 });

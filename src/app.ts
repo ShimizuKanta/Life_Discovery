@@ -431,23 +431,37 @@ function scrollCardWithKeys(event: KeyboardEvent, card: HTMLElement): void {
 function openEditor(item: Discovery): void {
   if (busy || moving) return;
   const metadata = { category: item.category ?? 'other', photo: item.photo ?? null };
-  const extras = (item.extraReviews ?? []).map(review => ({ ...review }));
-  const review = item.review && { ...item.review };
+  const extras = new Map((item.extraReviews ?? []).map((entry, index) => [index, { ...entry }]));
+  let nextReviewIndex = extras.size;
+  let review = item.review && { ...item.review };
+  const deleteReviewButton = `<button type="button" class="danger text-button delete-review" data-mutate>${t('deleteReview')}</button>`;
   const dialog = $<HTMLDialogElement>('#editor');
-  dialog.innerHTML = `<form id="edit-form"><div class="dialog-heading"><h2 id="edit-title">${t('editTitle')}</h2><button type="button" id="edit-close" class="icon-button" aria-label="${t('close')}">×</button></div><label for="edit-content">${t('content')}</label><textarea id="edit-content" rows="5" required>${escape(item.content)}</textarea>${metadataFields('edit', metadata)}<label for="edit-date">${t('date')}</label><input id="edit-date" type="datetime-local" required value="${localInput(new Date(item.discoveredAt))}">${review ? `<fieldset class="edit-review"><legend>${t('editReview')}</legend>${reviewFields('edit-', review)}</fieldset>` : ''}<div id="extra-reviews"></div><button type="button" id="add-review" class="secondary">${t('addReview')}</button><p class="helper">${t(item.decision === 'archived' ? 'archived' : item.decision === 'kept' ? 'kept' : 'pending')}</p><button class="primary" type="submit">${t('save')}</button><button id="${item.decision === 'archived' ? 'restore' : 'edit-archive'}" type="submit" class="secondary">${t(item.decision === 'archived' ? 'restore' : 'archive')}</button><div class="dialog-footer"><button id="delete" type="button" class="danger text-button" data-mutate>${t('delete')}</button><button id="edit-cancel" type="button" class="text-button">${t('cancel')}</button></div></form>`;
+  dialog.innerHTML = `<form id="edit-form"><div class="dialog-heading"><h2 id="edit-title">${t('editTitle')}</h2><button type="button" id="edit-close" class="icon-button" aria-label="${t('close')}">×</button></div><label for="edit-content">${t('content')}</label><textarea id="edit-content" rows="5" required>${escape(item.content)}</textarea>${metadataFields('edit', metadata)}<label for="edit-date">${t('date')}</label><input id="edit-date" type="datetime-local" required value="${localInput(new Date(item.discoveredAt))}">${review ? `<fieldset id="edit-annual-review" class="edit-review"><legend>${t('editReview')}</legend>${reviewFields('edit-', review)}${deleteReviewButton}</fieldset>` : ''}<div id="extra-reviews"></div><button type="button" id="add-review" class="secondary">${t('addReview')}</button><p class="helper">${t(item.decision === 'archived' ? 'archived' : item.decision === 'kept' ? 'kept' : 'pending')}</p><button class="primary" type="submit">${t('save')}</button><button id="${item.decision === 'archived' ? 'restore' : 'edit-archive'}" type="submit" class="secondary">${t(item.decision === 'archived' ? 'restore' : 'archive')}</button><div class="dialog-footer"><button id="delete" type="button" class="danger text-button" data-mutate>${t('delete')}</button><button id="edit-cancel" type="button" class="text-button">${t('cancel')}</button></div></form>`;
   dialog.showModal();
   bindMetadata('edit', metadata);
-  if (review) bindReviewFields('edit-', review);
+  const addReviewButton = $('#add-review');
+  const bindReviewDeletion = (fieldset: HTMLElement, remove: () => void) => {
+    $('.delete-review', fieldset).onclick = () => {
+      remove();
+      fieldset.remove();
+      addReviewButton.focus();
+    };
+  };
+  if (review) {
+    bindReviewFields('edit-', review);
+    bindReviewDeletion($('#edit-annual-review'), () => { review = null; });
+  }
   const appendReviewFields = (entry: Review, index: number) => {
     const prefix = `extra-${index}-`;
-    $('#extra-reviews').insertAdjacentHTML('beforeend', `<fieldset class="edit-review"><legend>${reviewHeading(item, entry)}</legend>${reviewFields(prefix, entry)}</fieldset>`);
+    $('#extra-reviews').insertAdjacentHTML('beforeend', `<fieldset id="${prefix}fields" class="edit-review"><legend>${reviewHeading(item, entry)}</legend>${reviewFields(prefix, entry)}${deleteReviewButton}</fieldset>`);
     bindReviewFields(prefix, entry);
+    bindReviewDeletion($(`#${prefix}fields`), () => { extras.delete(index); });
   };
   extras.forEach(appendReviewFields);
-  $('#add-review').onclick = () => {
+  addReviewButton.onclick = () => {
     const entry = { score: 50, comment: '', reviewedAt: new Date().toISOString() };
-    const index = extras.length;
-    extras.push(entry);
+    const index = nextReviewIndex++;
+    extras.set(index, entry);
     appendReviewFields(entry, index);
     $(`#extra-${index}-score`).focus();
   };
@@ -462,7 +476,9 @@ function openEditor(item: Discovery): void {
     void perform(async () => {
       const button = event.submitter ?? $('#edit-form .primary');
       const origin = button.getBoundingClientRect();
-      const changed = { ...item, ...metadata, content, ...(extras.length ? { extraReviews: extras.map(entry => ({ ...entry, comment: entry.comment.trim() })) } : {}), review: review && { ...review, comment: review.comment.trim() }, discoveredAt: date === localInput(new Date(item.discoveredAt)) ? item.discoveredAt : new Date(date).toISOString(), updatedAt: new Date().toISOString() };
+      const changed = { ...item, ...metadata, content, review: review && { ...review, comment: review.comment.trim() }, discoveredAt: date === localInput(new Date(item.discoveredAt)) ? item.discoveredAt : new Date(date).toISOString(), updatedAt: new Date().toISOString() };
+      if (extras.size) changed.extraReviews = Array.from(extras.values(), entry => ({ ...entry, comment: entry.comment.trim() }));
+      else delete changed.extraReviews;
       const decision = button.id === 'restore' ? 'kept' : button.id === 'edit-archive' ? 'archived' : undefined;
       const result = decision ? decide(changed, decision) : changed;
       await storage.saveDiscovery(result); updateItem(result); dialog.close(); render();
